@@ -1,37 +1,123 @@
 import SwiftUI
+import FirebaseAuth
+import GoogleSignIn
+import AuthenticationServices
 
 // MARK: - LoginView
 
 struct LoginView: View {
+    // When auth succeeds we push OnboardingAvatarView
+    @State private var goToOnboarding = false
+
     var onLogin: () -> Void = {}
 
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
 
+    // UI state
+    @State private var isWorking: Bool = false
+    @State private var errorText: String?
+
     var body: some View {
         ZStack {
             BackgroundDecor()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
-                    TitleBlock()
-                        .padding(.top, 40)
+            // Keep Navigation in here so we can push OnboardingAvatarView
+            NavigationStack {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 22) {
+                        TitleBlock()
+                            .padding(.top, 40)
 
-                    MascotBounceImage() // animated David
+                        MascotBounceImage() // animated David
 
-                    LoginCard(
-                        email: $email,
-                        password: $password,
-                        showPassword: $showPassword,
-                        onLogin: onLogin
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
+                        LoginCard(
+                            email: $email,
+                            password: $password,
+                            showPassword: $showPassword,
+                            onLogin: {},
+                            onGoogleTap: handleGoogleTap,
+                            onAppleTap: handleAppleTap
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
 
-                    FooterNote()
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 28)
+                        if let errorText {
+                            Text(errorText)
+                                .foregroundColor(.red)
+                                .font(.footnote)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                        }
+
+                        FooterNote()
+                            .padding(.horizontal, 28)
+                            .padding(.bottom, 28)
+
+                        // Hidden navigation trigger
+                        NavigationLink(
+                            destination: OnboardingAvatarView(),
+                            isActive: $goToOnboarding
+                        ) { EmptyView() }
+                        .hidden()
+                    }
+                }
+                .navigationBarHidden(true)
+            }
+        }
+
+        .overlay {
+            if isWorking {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .padding()
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+        .disabled(isWorking)
+    }
+
+    // MARK: - Handlers
+
+    private func handleGoogleTap() {
+        print("👉 Google button tapped")
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else {
+            self.errorText = "No presenting controller"
+            return
+        }
+        isWorking = true
+        errorText = nil
+
+        AuthService.signInWithGoogle(presenting: rootVC) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+                switch result {
+                case .success:
+                    
+                    goToOnboarding = true
+                case .failure(let err):
+                    self.errorText = err.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func handleAppleTap() {
+        print("👉 Apple button tapped")
+        isWorking = true
+        errorText = nil
+
+        AuthService.startSignInWithApple { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+                switch result {
+                case .success:
+                    onLogin()
+                    goToOnboarding = true
+                case .failure(let err):
+                    self.errorText = err.localizedDescription
                 }
             }
         }
@@ -72,7 +158,7 @@ private struct TitleBlock: View {
         VStack(spacing: 6) {
             Text("Welcome,")
                 .font(.system(size: 18, weight: .regular, design: .rounded))
-                .opacity(0.0) // visually hidden (keeps spacing similar if needed)
+                .opacity(0.0)
 
             Text("BibleQuest")
                 .font(.system(size: 44, weight: .heavy, design: .rounded))
@@ -120,6 +206,10 @@ private struct LoginCard: View {
     @Binding var showPassword: Bool
     var onLogin: () -> Void
 
+    // social actions
+    var onGoogleTap: () -> Void
+    var onAppleTap: () -> Void
+
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 26, style: .continuous)
             .fill(Color.white.opacity(0.72))
@@ -131,10 +221,11 @@ private struct LoginCard: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Social3DButtons()
+            Social3DButtons(onGoogleTap: onGoogleTap, onAppleTap: onAppleTap)
 
+            // Bigger divider tag so the text never truncates
             DividerTag(label: "Or continue with email")
-                .padding(.top, 4)
+                .padding(.top, 6)
 
             EmailField(email: $email)
             PasswordField(password: $password, showPassword: $showPassword)
@@ -151,10 +242,13 @@ private struct LoginCard: View {
 // MARK: - Social Buttons (3D White)
 
 private struct Social3DButtons: View {
+    let onGoogleTap: () -> Void
+    let onAppleTap: () -> Void
+
     var body: some View {
         VStack(spacing: 14) {
-            NeumorphicPill(icon: "globe", title: "Continue with Google")
-            NeumorphicPill(icon: "applelogo", title: "Continue with Apple")
+            NeumorphicPill(icon: "globe", title: "Continue with Google", onTap: onGoogleTap)
+            NeumorphicPill(icon: "applelogo", title: "Continue with Apple", onTap: onAppleTap)
         }
     }
 }
@@ -162,18 +256,25 @@ private struct Social3DButtons: View {
 private struct NeumorphicPill: View {
     let icon: String
     let title: String
+    var onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.35))
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.black.opacity(0.45))
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.45))
+
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.black.opacity(0.55))
+            }
+            // Center the contents in the pill
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, minHeight: 56)
+        .buttonStyle(.plain)
         .background(
             LinearGradient(colors: [Color.white, Color(hex: "#F6F8FF")],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -183,34 +284,34 @@ private struct NeumorphicPill: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(Color.white.opacity(0.95), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 8)   // drop shadow
-        .shadow(color: .white.opacity(0.9), radius: 8,  x: 0, y: -2)   // top highlight
+        .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 8)
+        .shadow(color: .white.opacity(0.9), radius: 8,  x: 0, y: -2)
     }
 }
 
-// MARK: - Divider Tag (single line)
+// MARK: - Divider Tag (single line, non-truncating, bigger)
 
 private struct DividerTag: View {
     let label: String
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
             Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
             Text(label)
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
                 .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(Color.black.opacity(0.65))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.95))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 1)
+                .foregroundStyle(Color.black.opacity(0.70))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.98))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .fixedSize(horizontal: true, vertical: false) // <- don’t truncate
+                .layoutPriority(1)
             Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
-// MARK: - Inputs (placeholders only)
+// MARK: - Inputs
 
 private struct EmailField: View {
     @Binding var email: String

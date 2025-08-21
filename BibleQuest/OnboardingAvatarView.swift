@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseDatabase
 
 // MARK: - Onboarding Avatar Picker
 
@@ -6,9 +8,10 @@ struct OnboardingAvatarView: View {
     struct Avatar: Identifiable { let id = UUID(); let image: String; let title: String }
 
     private let avatars: [Avatar] = [
-        .init(image: "david",  title: "David"),
-        .init(image: "david2", title: "David"),
-        .init(image: "noah",   title: "Noah")
+        .init(image: "david",       title: "David"),
+        .init(image: "mary",        title: "Mary"),
+        .init(image: "mosesAvatar", title: "Moses"),
+        .init(image: "noahAvatar",  title: "Noah")
     ]
 
     @State private var selectedIndex: Int = 0
@@ -17,6 +20,10 @@ struct OnboardingAvatarView: View {
 
     @State private var goToApp = false
     @FocusState private var nameFocused: Bool
+
+    // NEW: saving state & errors
+    @State private var isSaving = false
+    @State private var errorText: String?
 
     var body: some View {
         NavigationStack {
@@ -41,7 +48,7 @@ struct OnboardingAvatarView: View {
                     // Carousel
                     ZStack {
                         ForEach(avatars.indices, id: \.self) { i in
-                            let rel = CGFloat(i - selectedIndex) // -2,-1,0,1,2...
+                            let rel = CGFloat(i - selectedIndex)
                             let isCenter = i == selectedIndex
                             let baseSize: CGFloat = isCenter ? 190 : 110
                             let spacing: CGFloat = 150
@@ -82,7 +89,7 @@ struct OnboardingAvatarView: View {
                     // Name field
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Name")
-                            .font(.system(.headline, design: .rounded))
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
                             .foregroundStyle(Color(hex:"#1F6FE5"))
                         HStack(spacing: 10) {
                             Image(systemName: "pencil")
@@ -103,23 +110,68 @@ struct OnboardingAvatarView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 4)
 
+                    if let errorText {
+                        Text(errorText)
+                            .font(.footnote)
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 22)
+                    }
+
                     Spacer(minLength: 8)
 
                     // Begin button
-                    LiquidGlassButton(title: "Begin Adventure", icon: "play.fill") {
+                    LiquidGlassButton(title: isSaving ? "Saving..." : "Begin Adventure",
+                                      icon: "play.fill") {
                         nameFocused = false
-                        goToApp = true
+                        saveProfile()
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .opacity(name.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1)
+                    .disabled(isSaving || name.trimmed().isEmpty)
+                    .opacity((isSaving || name.trimmed().isEmpty) ? 0.6 : 1)
 
                     // Hidden navigation
                     NavigationLink("", destination: MainTabView(), isActive: $goToApp)
                         .opacity(0)
                 }
             }
+            .disabled(isSaving)
+        }
+    }
+
+    // MARK: - Save to Firebase, then proceed
+    private func saveProfile() {
+        errorText = nil
+
+        guard let uid = Auth.auth().currentUser?.uid else {
+            errorText = "Not signed in."
+            return
+        }
+        let trimmed = name.trimmed()
+        guard !trimmed.isEmpty else {
+            errorText = "Please enter your name."
+            return
+        }
+
+        isSaving = true
+        let usersRef = Database.database().reference().child("Users").child(uid)
+
+        // Save Name (and avatar for good measure)
+        let updates: [String: Any] = [
+          "Name": trimmed,
+          "Hero": avatars[selectedIndex].image,          // 👈 store the asset/image name here
+          // "avatar": avatars[selectedIndex].title,     // (optional) keep old key if other code reads it
+          "updatedAt": Date().timeIntervalSince1970
+        ]
+
+        usersRef.updateChildValues(updates) { error, _ in
+            isSaving = false
+            if let error = error {
+                errorText = "Failed to save: \(error.localizedDescription)"
+                return
+            }
+            // Navigate into the app
+            goToApp = true
         }
     }
 }
@@ -150,13 +202,10 @@ private struct AvatarBubble: View {
                     .padding(highlighted ? 18 : 20)
                     .clipShape(Circle())
             } else {
-                // fallback emoji if asset missing
-                Text("🧒")
-                    .font(.system(size: size * 0.45))
+                Text("🧒").font(.system(size: size * 0.45))
             }
 
             if highlighted {
-                // twinkling sparkles around center avatar
                 ZStack {
                     Image(systemName: "sparkles").offset(x: 0, y: -size/2)
                     Image(systemName: "sparkles").offset(x:  size/2.2, y:  size/3.0)
@@ -220,7 +269,7 @@ private struct LiquidGlassButton: View {
     }
 }
 
-// MARK: - Floating background bits
+// MARK: - Floating background bits (unchanged)
 
 private struct FloatingBits: View {
     @State private var t: CGFloat = 0
@@ -244,8 +293,8 @@ private struct FloatingBits: View {
     }
 }
 
-// MARK: - Preview
+// MARK: - Utils
 
-#Preview {
-    OnboardingAvatarView()
+private extension String {
+    func trimmed() -> String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

@@ -41,7 +41,9 @@ struct MainTabView: View {
 struct HomePage: View {
     // Navigation trigger for Hero Album
     @State private var goToHeroAlbum = false
-    @State private var goToVerseView = false 
+    @State private var goToVerseView = false
+    @State private var goToAdventure = false
+    
     var body: some View {
         ZStack {
             LinearGradient(
@@ -66,7 +68,6 @@ struct HomePage: View {
                     }
                     .padding(.top, 24)
 
-                    // Adventures (blue) — uses asset "noah"
                     HomeCard(
                         title: "Adventures",
                         subtitle: "Explore Bible stories",
@@ -74,7 +75,7 @@ struct HomePage: View {
                         tint: .white,
                         badgeImageName: "noah"
                     ) {
-                        // TODO: hook up to Adventures screen
+                        goToAdventure = true   // ✅ navigate to AdventureView
                     }
 
                     // Hero Album (purple) — uses asset "album"
@@ -114,9 +115,12 @@ struct HomePage: View {
                     .opacity(0)
                 NavigationLink("", destination: VerseView(), isActive: $goToVerseView) // ✅ new nav link
                     .opacity(0)
+                NavigationLink("", destination: AdventureView(), isActive: $goToAdventure) // ✅ add this
+                            .opacity(0)
             }
         )
-        .navigationBarBackButtonHidden()
+        .navigationBarBackButtonHidden(true)   // no back button on root
+                .navigationBarHidden(true) 
     }
 }
 

@@ -1,5 +1,7 @@
 import SwiftUI
 import Combine
+import FirebaseAuth
+import FirebaseDatabase
 
 // MARK: - Adventure Model
 
@@ -7,19 +9,17 @@ struct AdventureNode: Identifiable, Hashable {
     let id = UUID()
     let title: String
     let emoji: String
-    /// y-position along the tall map (0...mapHeight)
     let y: CGFloat
-    /// x offset (-140...140) to add variation left/right along the path
     let xOffset: CGFloat
 }
 
 // MARK: - View
 
 struct AdventureView: View {
-    // Tweak overall canvas height for how long the adventure is
+    // Map height
     private let mapHeight: CGFloat = 2800
 
-    // Quest stops (emoji should match story beats)
+    // Quest stops
     private let nodes: [AdventureNode] = [
         .init(title: "Shepherd’s Field", emoji: "🐑", y: 180,  xOffset: -60),
         .init(title: "Stream of Stones",  emoji: "🪨", y: 520,  xOffset: 40),
@@ -32,12 +32,15 @@ struct AdventureView: View {
 
     // Walking animation/progress
     @State private var isWalking = false
-    /// 0...1 across entire path
-    @State private var progress: CGFloat = 0
+    @State private var progress: CGFloat = 0              // 0...1 over full path
     @State private var walkCancellable: AnyCancellable?
 
     // Scroll tracking
     @State private var currentAnchorY: CGFloat = 0
+
+    // 🔹 User data from Firebase
+    @State private var userName: String = "Explorer"
+    @State private var heroKey: String = "david"   // keys like "david", "mary", "mosesAvatar", "noahAvatar"
 
     var body: some View {
         NavigationStack {
@@ -50,11 +53,8 @@ struct AdventureView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         ZStack {
-                            // Map image (optional). Add an image named "map_vertical"
-                            // or we render a soft gradient land behind the path.
                             MapBackdrop(mapHeight: mapHeight)
 
-                            // The winding path through the map  ✅ Shape so .stroke works
                             AdventurePathShape(nodes: nodes)
                                 .stroke(
                                     LinearGradient(
@@ -65,17 +65,19 @@ struct AdventureView: View {
                                 )
                                 .shadow(color: Color.black.opacity(0.10), radius: 6, x: 0, y: 3)
 
-                            // Pins for every location
-                            ForEach(nodes) { node in
-                                LocationPin(node: node)
+                            // ⤵︎ Make pins tappable and drive walking
+                            ForEach(Array(nodes.enumerated()), id: \.element.id) { (idx, node) in
+                                LocationPin(node: node) {
+                                    walkToNode(idx)
+                                }
                             }
 
-                            // David walking
-                            WalkingDavid(progress: progress,
-                                         nodes: nodes,
-                                         mapHeight: mapHeight)
+                            // 🔹 Walking hero (uses selected avatar)
+                            WalkingHero(heroKey: heroKey,
+                                        progress: progress,
+                                        nodes: nodes,
+                                        mapHeight: mapHeight)
                                 .onChange(of: progress) { _, newVal in
-                                    // auto-follow: scroll to David’s y as he moves
                                     let pos = positionAlongPath(progress: newVal, nodes: nodes)
                                     currentAnchorY = pos.y
                                     withAnimation(.easeInOut(duration: 0.35)) {
@@ -83,7 +85,7 @@ struct AdventureView: View {
                                     }
                                 }
 
-                            // Invisible anchor to scroll to (we shift with David’s y)
+                            // Invisible anchor to follow hero
                             GeometryReader { _ in
                                 Color.clear
                                     .frame(height: 1)
@@ -94,11 +96,9 @@ struct AdventureView: View {
                         .frame(height: mapHeight)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 30)
-                        // leave space so the floating pill doesn’t overlap content
-                        .padding(.bottom, 140) // was 100
+                        .padding(.bottom, 140)
                     }
                     .onAppear {
-                        // Start near the top node
                         currentAnchorY = nodes.first?.y ?? 0
                         proxy.scrollTo("anchor", anchor: .top)
                     }
@@ -106,7 +106,7 @@ struct AdventureView: View {
 
                 // Top UI
                 VStack(spacing: 10) {
-                    Text("David’s Adventure")
+                    Text("\(userName)’s Adventure")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(hex:"#1F6FE5"))
                         .shadow(color: Color.black.opacity(0.10), radius: 4, x: 0, y: 2)
@@ -117,19 +117,16 @@ struct AdventureView: View {
 
                     Spacer()
 
-                    // Controls
                     HStack(spacing: 12) {
                         Button { jump(to: 0.0) } label: {
                             ControlPill(icon: "arrow.uturn.backward", title: "Start")
                         }
-
                         Button { toggleWalk() } label: {
                             ControlPill(icon: isWalking ? "pause.fill" : "play.fill",
                                         title: isWalking ? "Pause" : "Walk")
                         }
-
                         Button { jump(to: 1.0) } label: {
-                            ControlPill(icon: "clock.fill", title: "Latest") // ← renamed from End
+                            ControlPill(icon: "clock.fill", title: "Latest")
                         }
                     }
                     .padding(.bottom, 10)
@@ -137,37 +134,64 @@ struct AdventureView: View {
                 .padding(.top, 10)
                 .padding(.horizontal, 16)
             }
-            // 👇 Floating pill OVER the map (no extra white layer)
             .overlay(alignment: .bottom) {
                 PlayAdventurePill { toggleWalk() }
                     .padding(.horizontal, 18)
-                    .padding(.bottom, 90) // ↑ moved higher (was 22)
+                    .padding(.bottom, 90)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear(perform: loadUserProfile)   // 🔹 fetch Name & Hero
         }
     }
 
-    // MARK: - Controls
+    // MARK: - Firebase
 
-    private func toggleWalk() {
-        if isWalking {
-            // pause
-            isWalking = false
-            walkCancellable?.cancel()
-            return
-        }
+    private func loadUserProfile() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        Database.database().reference()
+            .child("Users")
+            .child(uid)
+            .observeSingleEvent(of: .value) { snapshot in
+                guard let dict = snapshot.value as? [String: Any] else { return }
 
-        // Walk only to the NEXT node, then stop
-        let start = progress
-        let target = nextStopProgress(from: start)
-        guard target > start else { return }
+                if let name = (dict["Name"] as? String)?.trimmed(), !name.isEmpty {
+                    self.userName = name
+                } else if let dn = (dict["displayName"] as? String)?.trimmed(), !dn.isEmpty {
+                    self.userName = dn
+                } else if let gn = (dict["givenName"] as? String)?.trimmed(), !gn.isEmpty {
+                    self.userName = gn
+                } else if let email = dict["email"] as? String {
+                    self.userName = email.components(separatedBy: "@").first ?? "Explorer"
+                }
+
+                if let hero = (dict["Hero"] as? String)?.trimmed(), !hero.isEmpty {
+                    self.heroKey = hero
+                }
+            }
+    }
+
+    // MARK: - Movement
+
+    /// Tap handler: walk to a specific node index.
+    private func walkToNode(_ index: Int) {
+        let n = max(1, nodes.count - 1)
+        let target = CGFloat(index).clamped(to: 0...CGFloat(n)) / CGFloat(n)
+        walk(to: target)
+    }
+
+    /// Walk to an arbitrary progress (0...1), pausing any current walk.
+    private func walk(to targetProgress: CGFloat) {
+        let start = progress.clamped(to: 0...1)
+        let target = targetProgress.clamped(to: 0...1)
+        guard target != start else { return }
 
         isWalking = true
         walkCancellable?.cancel()
 
-        // ~16s for full path -> scale by segment length
+        // Base: ~16s for a full path → scale by distance
         let fullPathSeconds: Double = 16.0
-        let duration = max(0.35, fullPathSeconds * Double(target - start))
+        let distance = abs(Double(target - start))
+        let duration = max(0.30, fullPathSeconds * distance)
         let startDate = Date()
 
         walkCancellable = Timer.publish(every: 1/60, on: .main, in: .common)
@@ -181,8 +205,7 @@ struct AdventureView: View {
                     progress = value
                 }
 
-                if clampedT >= 1.0 || progress >= target - 0.0005 {
-                    // Snap and stop at node
+                if clampedT >= 1.0 {
                     progress = target
                     walkCancellable?.cancel()
                     isWalking = false
@@ -190,7 +213,19 @@ struct AdventureView: View {
             }
     }
 
-    /// Progress value for the next node boundary after a given progress.
+    private func toggleWalk() {
+        if isWalking {
+            isWalking = false
+            walkCancellable?.cancel()
+            return
+        }
+        // continue to next node boundary
+        let start = progress
+        let target = nextStopProgress(from: start)
+        guard target > start else { return }
+        walk(to: target)
+    }
+
     private func nextStopProgress(from p: CGFloat) -> CGFloat {
         let n = max(1, nodes.count - 1)
         let raw = p.clamped(to: 0...1) * CGFloat(n)
@@ -221,7 +256,6 @@ private struct MapBackdrop: View {
                     .clipped()
                     .opacity(0.95)
             } else {
-                // Fallback: soft “land” gradient
                 RoundedRectangle(cornerRadius: 36, style: .continuous)
                     .fill(
                         LinearGradient(
@@ -262,10 +296,12 @@ private struct AdventurePathShape: Shape {
     }
 }
 
-// MARK: - Marker Pins
+// MARK: - Marker Pins (now tappable)
 
 private struct LocationPin: View {
     let node: AdventureNode
+    var onTap: () -> Void
+
     var body: some View {
         VStack(spacing: 6) {
             Text(node.emoji)
@@ -286,25 +322,25 @@ private struct LocationPin: View {
                     Capsule().stroke(Color.black.opacity(0.06), lineWidth: 1)
                 )
         }
-        .position(x: UIScreen.main.bounds.width/2 + node.xOffset + 18, // +18 from outer padding
+        .position(x: UIScreen.main.bounds.width/2 + node.xOffset + 18,
                   y: node.y)
-        .onTapGesture {
-            // TODO: hook to your quest detail sheet if desired
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }       // ⤴︎ trigger walking
     }
 }
 
-// MARK: - Walking David
+// MARK: - Walking Hero (dynamic)
 
-private struct WalkingDavid: View {
+private struct WalkingHero: View {
+    let heroKey: String
     let progress: CGFloat
     let nodes: [AdventureNode]
     let mapHeight: CGFloat
 
-    // sprite frames: david_walk_1 ... david_walk_6 (falls back to "david")
     private var frames: [Image] {
         (1...6).compactMap { idx in
-            UIImage(named: "david_walk_\(idx)") != nil ? Image("david_walk_\(idx)") : nil
+            let name = "\(heroKey)_walk_\(idx)"
+            return UIImage(named: name) != nil ? Image(name) : nil
         }
     }
 
@@ -315,13 +351,7 @@ private struct WalkingDavid: View {
         let pos = positionAlongPath(progress: progress, nodes: nodes)
 
         Group {
-            if frames.isEmpty {
-                Image("david")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 72, height: 72)
-                    .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 6)
-            } else {
+            if !frames.isEmpty {
                 frames[frameIndex % frames.count]
                     .resizable()
                     .scaledToFit()
@@ -329,6 +359,12 @@ private struct WalkingDavid: View {
                     .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 6)
                     .onAppear { startTimer() }
                     .onDisappear { timer?.cancel() }
+            } else {
+                (UIImage(named: heroKey) != nil ? Image(heroKey) : Image("david"))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 76, height: 76)
+                    .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 6)
             }
         }
         .position(pos)
@@ -344,7 +380,6 @@ private struct WalkingDavid: View {
 
 // MARK: - Path interpolation
 
-/// Returns an on-path position for 0...1 progress by linearly blending between nodes.
 private func positionAlongPath(progress: CGFloat, nodes: [AdventureNode]) -> CGPoint {
     guard nodes.count > 1 else {
         return CGPoint(x: UIScreen.main.bounds.width/2, y: nodes.first?.y ?? 0)
@@ -408,7 +443,6 @@ private struct PlayAdventurePill: View {
             .padding(.horizontal, 24)
             .frame(height: 56)
             .background(
-                // liquid-glass feel: blue gradient + material shine
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(
                         LinearGradient(
@@ -420,7 +454,7 @@ private struct PlayAdventurePill: View {
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(.white.opacity(0.85), lineWidth: 2)
                     )
-                    .overlay(  // soft glassy highlight
+                    .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .fill(.ultraThinMaterial.opacity(0.25))
                             .blur(radius: 2)
@@ -434,12 +468,16 @@ private struct PlayAdventurePill: View {
     }
 }
 
-// MARK: - Handy clamp
+// MARK: - Handy clamp & utils
 
 private extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self {
         min(max(self, range.lowerBound), range.upperBound)
     }
+}
+
+private extension String {
+    func trimmed() -> String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
 // MARK: - Preview
