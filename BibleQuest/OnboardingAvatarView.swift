@@ -11,7 +11,10 @@ struct OnboardingAvatarView: View {
         .init(image: "david",       title: "David"),
         .init(image: "mary",        title: "Mary"),
         .init(image: "mosesAvatar", title: "Moses"),
-        .init(image: "noahAvatar",  title: "Noah")
+        .init(image: "noahAvatar",  title: "Noah"),
+        .init(image: "josephAvatar",title: "Joseph"),
+        .init(image: "peterAvatar", title: "Peter"),
+        .init(image: "jesusAvatar",  title: "Jesus")
     ]
 
     @State private var selectedIndex: Int = 0
@@ -295,6 +298,7 @@ private struct FloatingBits: View {
 
 // MARK: - Utils
 
-private extension String {
-    func trimmed() -> String { trimmingCharacters(in: .whitespacesAndNewlines) }
+
+#Preview {
+    OnboardingAvatarView()
 }

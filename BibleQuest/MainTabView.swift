@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 // MARK: - Main Tabs
 
@@ -115,7 +116,7 @@ struct HomePage: View {
                     .opacity(0)
                 NavigationLink("", destination: VerseView(), isActive: $goToVerseView) // ✅ new nav link
                     .opacity(0)
-                NavigationLink("", destination: AdventureView(), isActive: $goToAdventure) // ✅ add this
+                NavigationLink("", destination: SelectQuestView(), isActive: $goToAdventure) // ✅ add this
                             .opacity(0)
             }
         )
@@ -285,8 +286,10 @@ struct StoriesPage: View {
     }
 }
 
+
 struct ProfilePage: View {
     @EnvironmentObject var appState: AppState
+
     var body: some View {
         VStack(spacing: 16) {
             Text("Profile")
@@ -299,6 +302,10 @@ struct ProfilePage: View {
                 .foregroundStyle(Color(hex: "#2C7CF6"))
 
             Button(role: .destructive) {
+                // 🔹 Sign out from Firebase
+                try? Auth.auth().signOut()
+
+                // 🔹 Update app state so RootView shows LoginView
                 appState.isLoggedIn = false
             } label: {
                 Text("Logout")

@@ -114,7 +114,6 @@ struct LoginView: View {
                 self.isWorking = false
                 switch result {
                 case .success:
-                    onLogin()
                     goToOnboarding = true
                 case .failure(let err):
                     self.errorText = err.localizedDescription
