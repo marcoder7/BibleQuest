@@ -5,6 +5,8 @@ import FirebaseDatabase
 // MARK: - Onboarding Avatar Picker
 
 struct OnboardingAvatarView: View {
+    var onComplete: () -> Void = {}
+    @EnvironmentObject var appState: AppState
     struct Avatar: Identifiable { let id = UUID(); let image: String; let title: String }
 
     private let avatars: [Avatar] = [
@@ -120,16 +122,18 @@ struct OnboardingAvatarView: View {
                             .padding(.horizontal, 22)
                     }
 
-                    Spacer(minLength: 8)
-
-                    // Begin button
+                    Spacer(minLength: 60)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 12) {
                     LiquidGlassButton(title: isSaving ? "Saving..." : "Begin Adventure",
                                       icon: "play.fill") {
                         nameFocused = false
                         saveProfile()
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
                     .disabled(isSaving || name.trimmed().isEmpty)
                     .opacity((isSaving || name.trimmed().isEmpty) ? 0.6 : 1)
 
@@ -137,6 +141,7 @@ struct OnboardingAvatarView: View {
                     NavigationLink("", destination: MainTabView(), isActive: $goToApp)
                         .opacity(0)
                 }
+                .padding(.bottom, 24)
             }
             .disabled(isSaving)
         }
@@ -173,7 +178,16 @@ struct OnboardingAvatarView: View {
                 errorText = "Failed to save: \(error.localizedDescription)"
                 return
             }
-            // Navigate into the app
+            // Navigate into the app & let parent know onboarding completed
+            let profile = UserProfile(
+                uid: uid,
+                name: trimmed,
+                hero: avatars[selectedIndex].image,
+                email: Auth.auth().currentUser?.email ?? "",
+                photoURL: Auth.auth().currentUser?.photoURL?.absoluteString ?? ""
+            )
+            appState.profile = profile
+            onComplete()
             goToApp = true
         }
     }
@@ -230,7 +244,6 @@ private struct LiquidGlassButton: View {
     var title: String
     var icon: String
     var action: () -> Void
-    @State private var hover = false
 
     var body: some View {
         Button(action: action) {
@@ -265,10 +278,8 @@ private struct LiquidGlassButton: View {
                     )
             )
             .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 10)
-            .scaleEffect(hover ? 1.03 : 1.0)
-            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: hover)
         }
-        .onAppear { hover = true }
+        .buttonStyle(.plain)
     }
 }
 
@@ -301,4 +312,5 @@ private struct FloatingBits: View {
 
 #Preview {
     OnboardingAvatarView()
+        .environmentObject(AppState())
 }

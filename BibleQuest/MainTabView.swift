@@ -40,12 +40,14 @@ struct MainTabView: View {
 // MARK: - Home Page
 
 struct HomePage: View {
+    @EnvironmentObject var appState: AppState
     // Navigation trigger for Hero Album
     @State private var goToHeroAlbum = false
     @State private var goToVerseView = false
     @State private var goToAdventure = false
     
     var body: some View {
+        let welcomeName = appState.profile?.displayName ?? "Explorer"
         ZStack {
             LinearGradient(
                 colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
@@ -57,7 +59,7 @@ struct HomePage: View {
                 VStack(alignment: .leading, spacing: 18) {
                     // Header
                     VStack(spacing: 6) {
-                        Text("Welcome,\nExplorer!")
+                        Text("Welcome,\n\(welcomeName)!")
                             .font(.system(size: 36, weight: .heavy, design: .rounded))
                             .foregroundStyle(Color(hex: "#1F6FE5"))
                             .multilineTextAlignment(.center)
@@ -301,6 +303,10 @@ struct ProfilePage: View {
                 .frame(width: 100, height: 100)
                 .foregroundStyle(Color(hex: "#2C7CF6"))
 
+            Text(appState.profile?.displayName ?? "Explorer")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color(hex: "#1F6FE5"))
+
             Button(role: .destructive) {
                 // 🔹 Sign out from Firebase
                 try? Auth.auth().signOut()
@@ -337,4 +343,5 @@ struct ProfilePage: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(AppState())
 }
