@@ -40,7 +40,8 @@ struct DavidAdventureView: View {
     @State private var goToShepherdsField = false
     @State private var goToSlingGame = false
     @State private var goToArmorGame = false
-
+    @State private var goToValleyOfElah = false
+    
     
     // Game progress from Firebase
     @State private var completedGames: Set<String> = []
@@ -60,6 +61,7 @@ struct DavidAdventureView: View {
         case 0: goToShepherdsField = true
         case 1: goToSlingGame = true
         case 2: goToArmorGame = true
+        case 3: goToValleyOfElah = true
         default:
             toggleWalk()
         }
@@ -92,6 +94,13 @@ struct DavidAdventureView: View {
                     isActive: $goToArmorGame
                 ) { EmptyView() }
                 .hidden()
+                
+                NavigationLink(
+                    destination: ValleyOfElahGame(onComplete: {
+                        markGameCompleted("Valley of Elah")
+                    }),
+                    isActive: $goToValleyOfElah
+                ) { EmptyView() }.hidden()
 
                 // Background
                 LinearGradient(colors: [Color(hex:"#CFEAFF"), Color(hex:"#E8F2FF")],
