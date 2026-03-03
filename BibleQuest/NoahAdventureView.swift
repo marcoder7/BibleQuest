@@ -22,6 +22,7 @@ struct NoahAdventureView: View {
     @State private var progress: CGFloat = 0
     @State private var walkCancellable: AnyCancellable?
     @State private var currentAnchorY: CGFloat = 0
+    @State private var lastAutoScrollY: CGFloat = -1000
 
     @State private var userName: String = "Explorer"
     @State private var heroKey: String = "noah"
@@ -79,6 +80,10 @@ struct NoahAdventureView: View {
                                 LocationPin(node: node) {
                                     walkToNode(idx)
                                 }
+                                .position(
+                                    x: UIScreen.main.bounds.width / 2 + node.xOffset + 18,
+                                    y: node.y
+                                )
                             }
 
                             WalkingHero(heroKey: heroKey,
@@ -88,10 +93,7 @@ struct NoahAdventureView: View {
                                 .onChange(of: progress) { _, newVal in
                                     let pos = positionAlongPath(progress: newVal, nodes: nodes)
                                     currentAnchorY = pos.y
-                                    withAnimation(.easeInOut(duration: 0.35)) {
-                                        proxy.scrollTo("anchor", anchor: UnitPoint(x: 0.5,
-                                            y: min(0.5, (pos.y / mapHeight))))
-                                    }
+                                    autoScrollIfNeeded(proxy: proxy, to: pos.y)
                                 }
 
                             GeometryReader { _ in
@@ -108,6 +110,7 @@ struct NoahAdventureView: View {
                     }
                     .onAppear {
                         currentAnchorY = nodes.first?.y ?? 0
+                        lastAutoScrollY = currentAnchorY
                         proxy.scrollTo("anchor", anchor: .top)
                     }
                 }
@@ -187,6 +190,7 @@ struct NoahAdventureView: View {
 
         isWalking = true
         walkCancellable?.cancel()
+        lastAutoScrollY = -1000
 
         let fullPathSeconds: Double = 16.0
         let distance = abs(Double(target - start))
@@ -200,9 +204,7 @@ struct NoahAdventureView: View {
                 let clampedT = min(1.0, t)
                 let value = start + CGFloat(clampedT) * (target - start)
 
-                withAnimation(.easeInOut(duration: 1/60)) {
-                    progress = value
-                }
+                progress = value
 
                 if clampedT >= 1.0 {
                     progress = target
@@ -233,10 +235,24 @@ struct NoahAdventureView: View {
 
     private func jump(to value: CGFloat) {
         walkCancellable?.cancel()
+        lastAutoScrollY = -1000
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             progress = value.clamped(to: 0...1)
         }
         isWalking = false
+    }
+
+    private func autoScrollIfNeeded(proxy: ScrollViewProxy, to positionY: CGFloat) {
+        let threshold: CGFloat = isWalking ? 0 : 18
+        let shouldScroll = abs(positionY - lastAutoScrollY) >= threshold
+        guard shouldScroll else { return }
+
+        lastAutoScrollY = positionY
+        var transaction = Transaction()
+        transaction.animation = isWalking ? nil : .easeOut(duration: 0.22)
+        withTransaction(transaction) {
+            proxy.scrollTo("anchor", anchor: .center)
+        }
     }
 }
 

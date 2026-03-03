@@ -92,8 +92,7 @@ struct LocationPin: View {
                     Capsule().stroke(Color.black.opacity(0.06), lineWidth: 1)
                 )
         }
-        .position(x: UIScreen.main.bounds.width/2 + node.xOffset + 18,
-                  y: node.y)
+        .frame(width: 170)
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
     }
@@ -199,16 +198,18 @@ struct ControlPill: View {
 // MARK: - PlayAdventurePill
 
 struct PlayAdventurePill: View {
+    var title: String = "Play Adventure"
+    var icon: String = "play.fill"
     var action: () -> Void
     @State private var hover = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: "play.fill")
+                Image(systemName: icon)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.white.opacity(0.95))
-                Text("Play Adventure")
+                Text(title)
                     .font(.system(size: 20, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
             }

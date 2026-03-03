@@ -9,22 +9,22 @@ struct DavidAdventureView: View {
     // David’s 7 Quest stops
     private let nodes: [AdventureNode] = [
         .init(title: "Shepherd’s Field", emoji: "🐑", y: 180,  xOffset: -60),
-        .init(title: "Stream of Stones",  emoji: "🪨", y: 520,  xOffset: 40),
-        .init(title: "Camp of Israel",    emoji: "🏕️", y: 900,  xOffset: -80),
-        .init(title: "Valley of Elah",    emoji: "🛡️", y: 1250, xOffset: 70),
-        .init(title: "Face Goliath",      emoji: "📯", y: 1600, xOffset: -60),
-        .init(title: "The Sling",         emoji: "🏹", y: 1980, xOffset: 50),
+        .init(title: "Roaring Beast",     emoji: "🦁", y: 520,  xOffset: 40),
+        .init(title: "Stream of Stones",  emoji: "🪨", y: 900,  xOffset: -80),
+        .init(title: "Camp of Israel",    emoji: "🏕️", y: 1250, xOffset: 70),
+        .init(title: "Valley of Elah",    emoji: "🛡️", y: 1600, xOffset: -60),
+        .init(title: "Face Goliath",      emoji: "📯", y: 1980, xOffset: 50),
         .init(title: "Victory!",          emoji: "👑", y: 2380, xOffset: -30)
     ]
 
     // 🔑 Map node titles → Firebase keys
     private let nodeKeyMap: [String: String] = [
         "Shepherd’s Field": "ShepherdField",
+        "Roaring Beast": "RoaringBeast",
         "Stream of Stones": "StreamOfStones",
         "Camp of Israel": "CampOfIsrael",
         "Valley of Elah": "ValleyOfElah",
         "Face Goliath": "FaceGoliath",
-        "The Sling": "TheSling",
         "Victory!": "Victory"
     ]
 
@@ -33,14 +33,19 @@ struct DavidAdventureView: View {
     @State private var progress: CGFloat = 0
     @State private var walkCancellable: AnyCancellable?
     @State private var currentAnchorY: CGFloat = 0
+    @State private var lastAutoScrollY: CGFloat = -1000
+    @State private var hasLoadedAdventureState = false
 
     // User profile
     @State private var userName: String = "Explorer"
     @State private var heroKey: String = "david"
     @State private var goToShepherdsField = false
-    @State private var goToSlingGame = false
+    @State private var goToRoaringBeast = false
+    @State private var goToStreamOfStones = false
     @State private var goToArmorGame = false
     @State private var goToValleyOfElah = false
+    @State private var goToFaceGoliath = false
+    @State private var goToHeroAlbum = false
     
     
     // Game progress from Firebase
@@ -49,6 +54,8 @@ struct DavidAdventureView: View {
     // Alert state
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var showTrophyUnlockPopup = false
+    @State private var isClaimingTrophy = false
 
     private var currentNodeIndex: Int {
         let n = max(1, nodes.count - 1)
@@ -57,12 +64,11 @@ struct DavidAdventureView: View {
     }
 
     private func playAdventureTap() {
-        switch currentNodeIndex {
-        case 0: goToShepherdsField = true
-        case 1: goToSlingGame = true
-        case 2: goToArmorGame = true
-        case 3: goToValleyOfElah = true
-        default:
+        if currentNodeIndex == nodes.count - 1 {
+            claimDavidTrophy()
+            return
+        }
+        if !openGame(at: currentNodeIndex) {
             toggleWalk()
         }
     }
@@ -80,9 +86,18 @@ struct DavidAdventureView: View {
                 .hidden()
                 
                 NavigationLink(
-                    destination: StreamOfStonesGame()
-                        .onDisappear { markGameCompleted("Stream of Stones") },
-                    isActive: $goToSlingGame
+                    destination: RoaringBeastGame(onComplete: {
+                        markGameCompleted("Roaring Beast")
+                    }),
+                    isActive: $goToRoaringBeast
+                ) { EmptyView() }
+                .hidden()
+
+                NavigationLink(
+                    destination: StreamOfStonesGame(onComplete: {
+                        markGameCompleted("Stream of Stones")
+                    }),
+                    isActive: $goToStreamOfStones
                 ) { EmptyView() }
                 .hidden()
                 
@@ -100,6 +115,18 @@ struct DavidAdventureView: View {
                         markGameCompleted("Valley of Elah")
                     }),
                     isActive: $goToValleyOfElah
+                ) { EmptyView() }.hidden()
+
+                NavigationLink(
+                    destination: FaceGoliathGame(onComplete: {
+                        markGameCompleted("Face Goliath")
+                    }),
+                    isActive: $goToFaceGoliath
+                ) { EmptyView() }.hidden()
+
+                NavigationLink(
+                    destination: HeroAlbumView(focusedHeroName: "David"),
+                    isActive: $goToHeroAlbum
                 ) { EmptyView() }.hidden()
 
                 // Background
@@ -129,8 +156,12 @@ struct DavidAdventureView: View {
 
                             ForEach(Array(nodes.enumerated()), id: \.element.id) { (idx, node) in
                                 LocationPin(node: node) {
-                                  //  handleNodeTap(idx)
+                                    handleNodeTap(idx)
                                 }
+                                .position(
+                                    x: UIScreen.main.bounds.width / 2 + node.xOffset + 18,
+                                    y: node.y
+                                )
                             }
 
                             WalkingHero(heroKey: heroKey,
@@ -140,12 +171,7 @@ struct DavidAdventureView: View {
                                 .onChange(of: progress) { _, newVal in
                                     let pos = positionAlongPath(progress: newVal, nodes: nodes)
                                     currentAnchorY = pos.y
-                                    withAnimation(.easeInOut(duration: 0.35)) {
-                                        proxy.scrollTo("anchor", anchor: UnitPoint(
-                                            x: 0.5,
-                                            y: min(0.5, (pos.y / mapHeight))
-                                        ))
-                                    }
+                                    autoScrollIfNeeded(proxy: proxy, to: pos.y)
                                 }
 
                             GeometryReader { _ in
@@ -160,15 +186,18 @@ struct DavidAdventureView: View {
                         .padding(.vertical, 30)
                         .padding(.bottom, 140)
                     }
+                    .scrollDisabled(isWalking)
                     .onAppear {
-                        currentAnchorY = nodes.first?.y ?? 0
-                        proxy.scrollTo("anchor", anchor: .top)
+                        let pos = positionAlongPath(progress: progress, nodes: nodes)
+                        currentAnchorY = pos.y
+                        lastAutoScrollY = -1000
+                        proxy.scrollTo("anchor", anchor: .center)
                     }
                 }
 
                 // Top UI
                 VStack(spacing: 10) {
-                    Text("\(userName)’s Adventure")
+                    Text("David's Adventure")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(hex:"#1F6FE5"))
                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
@@ -187,7 +216,7 @@ struct DavidAdventureView: View {
                             ControlPill(icon: isWalking ? "pause.fill" : "play.fill",
                                         title: isWalking ? "Pause" : "Walk")
                         }
-                        Button { jump(to: 1.0) } label: {
+                        Button { jumpToLatest() } label: {
                             ControlPill(icon: "clock.fill", title: "Latest")
                         }
                     }
@@ -197,14 +226,38 @@ struct DavidAdventureView: View {
                 .padding(.horizontal, 16)
             }
             .overlay(alignment: .bottom) {
-                PlayAdventurePill { playAdventureTap() }
+                PlayAdventurePill(
+                    title: currentNodeIndex == nodes.count - 1
+                        ? (isClaimingTrophy ? "Claiming..." : "Claim Trophy")
+                        : "Play Adventure",
+                    icon: currentNodeIndex == nodes.count - 1 ? "trophy.fill" : "play.fill"
+                ) {
+                    playAdventureTap()
+                }
+                    .disabled(isClaimingTrophy)
+                    .opacity(isClaimingTrophy ? 0.8 : 1)
                     .padding(.horizontal, 18)
                     .padding(.bottom, 90)
+            }
+            .overlay {
+                if showTrophyUnlockPopup {
+                    DavidTrophyUnlockOverlay {
+                        showTrophyUnlockPopup = false
+                        goToHeroAlbum = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            goToHeroAlbum = true
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 loadUserProfile()
                 loadCompletedGames()
+            }
+            .onDisappear {
+                saveAdventureProgress(progress)
             }
             .alert("Locked", isPresented: $showAlert) {
                 Button("OK", role: .cancel) {}
@@ -248,8 +301,24 @@ struct DavidAdventureView: View {
                         completed.insert(snap.key)
                     }
                 }
+                let savedProgress = (snapshot.childSnapshot(forPath: "Progress").value as? NSNumber).map {
+                    CGFloat(truncating: $0).clamped(to: 0...1)
+                }
+
                 self.completedGames = completed
-                print("📡 loaded completedGames=\(completed)")
+                if !hasLoadedAdventureState {
+                    let unlockedProgress = latestAccessibleProgress(using: completed)
+                    let restored: CGFloat
+                    if let savedProgress {
+                        restored = min(savedProgress, unlockedProgress)
+                    } else {
+                        restored = unlockedProgress
+                    }
+                    progress = restored.clamped(to: 0...1)
+                    hasLoadedAdventureState = true
+                    saveAdventureProgress(progress)
+                }
+                print("📡 loaded completedGames=\(completed), progress=\(progress)")
             }
     }
 
@@ -264,14 +333,180 @@ struct DavidAdventureView: View {
             .child("David")
             .child(gameKey)
             .setValue(true)
+
+        completedGames.insert(gameKey)
+        saveAdventureProgress(progress)
     }
 
-    // MARK: - Node tap handler with full chain locking + debug
-//    private func handleNodeTap(_ index: Int) {
-//        let nodeTitle = nodes[index].title
-//        print("👉 handleNodeTap index=\(index) nodeTitle=\(nodeTitle)")
-//        walkToNode(index)   // 👈 always walk, no alert
-//    }
+    private func claimDavidTrophy() {
+        guard !isClaimingTrophy else { return }
+
+        let victoryIndex = nodes.count - 1
+        guard currentNodeIndex >= victoryIndex else {
+            alertMessage = "Reach the Victory stop before claiming your trophy."
+            showAlert = true
+            return
+        }
+
+        if let missingTitle = firstMissingPrerequisite(before: victoryIndex) {
+            alertMessage = "Please complete \"\(missingTitle)\" before claiming your trophy."
+            showAlert = true
+            return
+        }
+
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        isClaimingTrophy = true
+
+        let updates: [String: Any] = [
+            "Users/\(uid)/Adventures/David/Victory": true,
+            "Users/\(uid)/HeroAlbumUnlocked/David": true
+        ]
+
+        Database.database().reference().updateChildValues(updates) { error, _ in
+            DispatchQueue.main.async {
+                isClaimingTrophy = false
+                if let error {
+                    alertMessage = "Could not claim trophy right now. \(error.localizedDescription)"
+                    showAlert = true
+                    return
+                }
+
+                completedGames.insert("Victory")
+                saveAdventureProgress(1)
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                    progress = 1
+                    showTrophyUnlockPopup = true
+                }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
+    }
+
+    // MARK: - Node taps
+    private func handleNodeTap(_ index: Int) {
+        guard nodes.indices.contains(index) else { return }
+
+        if isWalking {
+            isWalking = false
+            walkCancellable?.cancel()
+            saveAdventureProgress(progress)
+        }
+
+        let victoryIndex = nodes.count - 1
+        if index == victoryIndex, index <= currentNodeIndex {
+            claimDavidTrophy()
+            return
+        }
+
+        // Completed games should always be replayable from the map.
+        if isNodeCompleted(index), openGame(at: index) {
+            return
+        }
+
+        // Replay any past/current playable game directly.
+        if index <= currentNodeIndex {
+            if openGame(at: index) { return }
+            alertMessage = "\"\(nodes[index].title)\" game is not available yet."
+            showAlert = true
+            return
+        }
+
+        // Future node: walk only when prerequisites are complete.
+        if let missingTitle = firstMissingPrerequisite(before: index) {
+            alertMessage = "Please complete \"\(missingTitle)\" before moving to \"\(nodes[index].title)\"."
+            showAlert = true
+            return
+        }
+
+        walkToNode(index)
+    }
+
+    @discardableResult
+    private func openGame(at index: Int) -> Bool {
+        resetGameNavigationFlags()
+        switch index {
+        case 0:
+            DispatchQueue.main.async { goToShepherdsField = true }
+            return true
+        case 1:
+            DispatchQueue.main.async { goToRoaringBeast = true }
+            return true
+        case 2:
+            DispatchQueue.main.async { goToStreamOfStones = true }
+            return true
+        case 3:
+            DispatchQueue.main.async { goToArmorGame = true }
+            return true
+        case 4:
+            DispatchQueue.main.async { goToValleyOfElah = true }
+            return true
+        case 5:
+            DispatchQueue.main.async { goToFaceGoliath = true }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func resetGameNavigationFlags() {
+        goToShepherdsField = false
+        goToRoaringBeast = false
+        goToStreamOfStones = false
+        goToArmorGame = false
+        goToValleyOfElah = false
+        goToFaceGoliath = false
+    }
+
+    private func firstMissingPrerequisite(before index: Int) -> String? {
+        guard index > 0 else { return nil }
+        for prevIndex in 0..<index {
+            let prevTitle = nodes[prevIndex].title
+            guard let prevKey = nodeKeyMap[prevTitle] else { continue }
+            if !completedGames.contains(prevKey) {
+                return prevTitle
+            }
+        }
+        return nil
+    }
+
+    private func isNodeCompleted(_ index: Int) -> Bool {
+        guard nodes.indices.contains(index) else { return false }
+        let title = nodes[index].title
+        guard let key = nodeKeyMap[title] else { return false }
+        return completedGames.contains(key)
+    }
+
+    private func latestAccessibleProgress(using completed: Set<String>? = nil) -> CGFloat {
+        let completedSet = completed ?? completedGames
+        let n = max(1, nodes.count - 1)
+        var highestUnlockedIndex = 0
+
+        for idx in 0...n {
+            var canAccess = true
+            if idx > 0 {
+                for prevIndex in 0..<idx {
+                    let prevTitle = nodes[prevIndex].title
+                    guard let prevKey = nodeKeyMap[prevTitle] else { continue }
+                    if !completedSet.contains(prevKey) {
+                        canAccess = false
+                        break
+                    }
+                }
+            }
+            if canAccess {
+                highestUnlockedIndex = idx
+            } else {
+                break
+            }
+        }
+
+        return CGFloat(highestUnlockedIndex) / CGFloat(n)
+    }
+
+    private func jumpToLatest() {
+        let unlockedProgress = latestAccessibleProgress()
+        jump(to: unlockedProgress.clamped(to: 0...1))
+    }
     
     
     // MARK: - Movement
@@ -288,6 +523,7 @@ struct DavidAdventureView: View {
 
         isWalking = true
         walkCancellable?.cancel()
+        lastAutoScrollY = -1000
 
         let fullPathSeconds: Double = 16.0
         let distance = abs(Double(target - start))
@@ -301,14 +537,13 @@ struct DavidAdventureView: View {
                 let clampedT = min(1.0, t)
                 let value = start + CGFloat(clampedT) * (target - start)
 
-                withAnimation(.easeInOut(duration: 1/60)) {
-                    progress = value
-                }
+                progress = value
 
                 if clampedT >= 1.0 {
                     progress = target
                     walkCancellable?.cancel()
                     isWalking = false
+                    saveAdventureProgress(progress)
                 }
             }
     }
@@ -317,6 +552,7 @@ struct DavidAdventureView: View {
         if isWalking {
             isWalking = false
             walkCancellable?.cancel()
+            saveAdventureProgress(progress)
             return
         }
 
@@ -325,20 +561,12 @@ struct DavidAdventureView: View {
         let raw = start.clamped(to: 0...1) * CGFloat(n)
         let nextIndex = min(n, Int(floor(raw)) + 1)
 
-        // 🔒 Check prerequisites before walking
         let nextTitle = nodes[nextIndex].title
-        guard let nextKey = nodeKeyMap[nextTitle] else { return }
-
-        for prevIndex in 0..<nextIndex {
-            let prevTitle = nodes[prevIndex].title
-            guard let prevKey = nodeKeyMap[prevTitle] else { continue }
-
-            if !completedGames.contains(prevKey) {
-                alertMessage = "Please complete \"\(prevTitle)\" before moving to \"\(nextTitle)\"."
-                showAlert = true
-                print("   ❌ Blocked walk button: \(prevTitle) not completed")
-                return
-            }
+        if let missingTitle = firstMissingPrerequisite(before: nextIndex) {
+            alertMessage = "Please complete \"\(missingTitle)\" before moving to \"\(nextTitle)\"."
+            showAlert = true
+            print("   ❌ Blocked walk button: \(missingTitle) not completed")
+            return
         }
 
         // ✅ All prerequisites done, walk to nextIndex
@@ -355,14 +583,161 @@ struct DavidAdventureView: View {
 
     private func jump(to value: CGFloat) {
         walkCancellable?.cancel()
+        lastAutoScrollY = -1000
+        let target = value.clamped(to: 0...1)
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            progress = value.clamped(to: 0...1)
+            progress = target
         }
         isWalking = false
+        saveAdventureProgress(target)
+    }
+
+    private func autoScrollIfNeeded(proxy: ScrollViewProxy, to positionY: CGFloat) {
+        let threshold: CGFloat = isWalking ? 0 : 18
+        let shouldScroll = abs(positionY - lastAutoScrollY) >= threshold
+        guard shouldScroll else { return }
+
+        lastAutoScrollY = positionY
+        var transaction = Transaction()
+        transaction.animation = isWalking ? nil : .easeOut(duration: 0.22)
+        withTransaction(transaction) {
+            proxy.scrollTo("anchor", anchor: .center)
+        }
+    }
+
+    private func saveAdventureProgress(_ value: CGFloat) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let clamped = value.clamped(to: 0...1)
+        Database.database().reference()
+            .child("Users")
+            .child(uid)
+            .child("Adventures")
+            .child("David")
+            .child("Progress")
+            .setValue(Double(clamped))
     }
 }
 
 // MARK: - Preview
 #Preview {
     DavidAdventureView()
+}
+
+private struct DavidTrophyUnlockOverlay: View {
+    var onClose: () -> Void
+
+    @State private var revealed = false
+    @State private var pulsing = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.52)
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                Text("Trophy Unlocked!")
+                    .font(.system(size: 32, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "#FFE08A"), Color(hex: "#FFB34D")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 150, height: 150)
+                        .scaleEffect(pulsing ? 1.04 : 0.96)
+                        .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
+
+                    Image(systemName: revealed ? "trophy.fill" : "lock.fill")
+                        .font(.system(size: 56, weight: .black))
+                        .foregroundStyle(revealed ? Color(hex: "#8A4B00") : .white)
+                        .scaleEffect(revealed ? 1.04 : 0.86)
+                        .rotationEffect(.degrees(revealed ? 0 : -8))
+                        .animation(.spring(response: 0.34, dampingFraction: 0.78), value: revealed)
+
+                    ForEach(0..<8, id: \.self) { idx in
+                        Image(systemName: "sparkle")
+                            .font(.system(size: idx.isMultiple(of: 2) ? 14 : 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(revealed ? 0.95 : 0.0))
+                            .offset(y: -74)
+                            .rotationEffect(.degrees(Double(idx) * 45))
+                            .scaleEffect(pulsing ? 1.08 : 0.92)
+                    }
+                }
+
+                if UIImage(named: "davidFull") != nil {
+                    Image("davidFull")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 120, height: 120)
+                        .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 6)
+                        .transition(.scale.combined(with: .opacity))
+                } else if UIImage(named: "runningDavid") != nil {
+                    Image("runningDavid")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 120, height: 120)
+                        .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 6)
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    Text("🪨")
+                        .font(.system(size: 64))
+                }
+
+                Text("David’s trophy has been added to your Hero Album.")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+
+                Button(action: onClose) {
+                    Text("Awesome!")
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "#2C7CF6"), Color(hex: "#7A4AF8")],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "#4C88DE"), Color(hex: "#5E9DE8")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(.white.opacity(0.85), lineWidth: 2)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 10)
+            .padding(.horizontal, 24)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.05).repeatForever(autoreverses: true)) {
+                pulsing = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                revealed = true
+            }
+        }
+    }
 }

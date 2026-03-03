@@ -19,19 +19,30 @@ struct MainTabView: View {
             }
             .tag(0)
 
-            StoriesPage()
+            NavigationStack {
+                StoriesView()
+            }
                 .tabItem {
                     Image(systemName: selection == 1 ? "book.closed.fill" : "book.closed")
                     Text("Stories")
                 }
                 .tag(1)
 
+            NavigationStack {
+                WisdomView()
+            }
+            .tabItem {
+                Image(systemName: selection == 2 ? "lightbulb.fill" : "lightbulb")
+                Text("Wisdom")
+            }
+            .tag(2)
+
             ProfilePage()
                 .tabItem {
-                    Image(systemName: selection == 2 ? "person.crop.circle.fill" : "person.crop.circle")
+                    Image(systemName: selection == 3 ? "person.crop.circle.fill" : "person.crop.circle")
                     Text("Profile")
                 }
-                .tag(2)
+                .tag(3)
         }
         .tint(Color(hex: "#2C7CF6"))
     }
@@ -71,6 +82,9 @@ struct HomePage: View {
                     }
                     .padding(.top, 24)
 
+                    // Challenge (gradient)
+                    ChallengeCard()
+
                     HomeCard(
                         title: "Adventures",
                         subtitle: "Explore Bible stories",
@@ -102,13 +116,10 @@ struct HomePage: View {
                     ) {
                         goToVerseView = true   // ✅ trigger navigation
                     }
-
-                    // Challenge (gradient)
-                    ChallengeCard()
-                        .padding(.bottom, 28)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .padding(.bottom, 28)
             }
         }
         // Hidden navigation links
@@ -136,8 +147,6 @@ struct HomeCard: View {
     let tint: Color
     var badgeImageName: String? = nil
     var action: (() -> Void)? = nil   // ← callback for navigation
-
-    @State private var isPressed: Bool = false
 
     var body: some View {
         let corner: CGFloat = 28
@@ -183,15 +192,16 @@ struct HomeCard: View {
                     .stroke(.white.opacity(0.35), lineWidth: 1)
                     .padding(1)
             )
-            .scaleEffect(isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPressed)
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
+        .buttonStyle(HomeCardPressStyle())
+    }
+}
+
+private struct HomeCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -265,29 +275,6 @@ struct ChallengeCard: View {
         .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 12)
     }
 }
-
-// MARK: - Stories + Profile placeholders
-
-struct StoriesPage: View {
-    var body: some View {
-        VStack {
-            Text("Stories")
-                .font(.system(size: 28, weight: .heavy, design: .rounded))
-                .padding(.top, 24)
-            Text("Your story library will appear here.")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        )
-    }
-}
-
 
 struct ProfilePage: View {
     @EnvironmentObject var appState: AppState

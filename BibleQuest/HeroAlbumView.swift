@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseDatabase
 
 // MARK: - Model
 
@@ -7,20 +9,30 @@ struct HeroCard: Identifiable, Equatable, Hashable {
     let name: String
     let value: String
     let emoji: String
-    let isUnlocked: Bool
+    var isUnlocked: Bool
 }
 
 // MARK: - Album
 
 struct HeroAlbumView: View {
-    // Demo data
-    @State private var heroes: [HeroCard] = [
-        .init(name: "David",  value: "Courage",        emoji: "🪨", isUnlocked: true),
-        .init(name: "Noah",   value: "Obedience",      emoji: "🌊", isUnlocked: true),
+    var focusedHeroName: String? = nil
+    @State private var heroes: [HeroCard] = Self.baseHeroes
+    @State private var hasAutoScrolledToFocusedHero = false
+
+    // Stats
+    private var collectedCount: Int { heroes.filter { $0.isUnlocked }.count }
+    private var totalCount: Int { heroes.count }
+
+    // Layout
+    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
+
+    private static let baseHeroes: [HeroCard] = [
+        .init(name: "David",  value: "Courage",        emoji: "🪨", isUnlocked: false),
+        .init(name: "Noah",   value: "Obedience",      emoji: "🌊", isUnlocked: false),
         .init(name: "Jonah",  value: "Second Chances", emoji: "🐋", isUnlocked: false),
-        .init(name: "Daniel", value: "Faithfulness",   emoji: "🦁", isUnlocked: true),
+        .init(name: "Daniel", value: "Faithfulness",   emoji: "🦁", isUnlocked: false),
         .init(name: "Esther", value: "Bravery",        emoji: "👑", isUnlocked: false),
-        .init(name: "Moses",  value: "Leadership",     emoji: "🔥", isUnlocked: true),
+        .init(name: "Moses",  value: "Leadership",     emoji: "🔥", isUnlocked: false),
         .init(name: "Abraham",value: "Faith",          emoji: "⭐️", isUnlocked: false),
         .init(name: "Joseph", value: "Forgiveness",    emoji: "🎽", isUnlocked: false),
         .init(name: "Mary",   value: "Humility",       emoji: "🌹", isUnlocked: false),
@@ -37,70 +49,108 @@ struct HeroAlbumView: View {
         .init(name: "Jesus",  value: "Love",           emoji: "✨", isUnlocked: false),
     ]
 
-    // Stats
-    private var collectedCount: Int { heroes.filter { $0.isUnlocked }.count }
-    private let totalCount: Int = 20
+    private let adventureHeroMap: [String: String] = [
+        "David": "David",
+        "Noah": "Noah",
+        "Jonah": "Jonah",
+        "Daniel": "Daniel",
+        "Esther": "Esther",
+        "Moses": "Moses",
+        "Abraham": "Abraham",
+        "Joseph": "Joseph",
+        "Mary": "Mary",
+        "Joshua": "Joshua",
+        "Deborah": "Deborah",
+        "Ruth": "Ruth",
+        "Elijah": "Elijah",
+        "Elisha": "Elisha",
+        "Samuel": "Samuel",
+        "Peter": "Peter",
+        "Paul": "Paul",
+        "MaryM": "Mary M.",
+        "MaryMagdalene": "Mary M.",
+        "Solomon": "Solomon",
+        "Jesus": "Jesus"
+    ]
 
-    // Layout
-    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
+    private let completionNodeByAdventure: [String: String] = [
+        "David": "Victory",
+        "Noah": "RainbowPromise",
+        "Jonah": "Nineveh",
+        "Daniel": "LionsDen",
+        "Moses": "PromisedLand",
+        "Jesus": "Resurrection"
+    ]
 
     var body: some View {
         ZStack {
             BackgroundGradient()
 
-            ScrollView {
-                VStack(spacing: 18) {
-                    Header()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 18) {
+                        Header()
 
-                    ProgressCard(collected: collectedCount, total: totalCount)
+                        ProgressCard(collected: collectedCount, total: totalCount)
 
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(heroes.indices, id: \.self) { i in
-                            let hero = heroes[i]
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(heroes.indices, id: \.self) { i in
+                                let hero = heroes[i]
+                                let highlighted = hero.name == focusedHeroName
 
-                            if hero.isUnlocked {
-                                // ✅ Unlocked → NavigationLink to detail
-                                NavigationLink {
-                                    HeroDetailView(
-                                        hero: toDetail(hero),
-                                        collectedCount: collectedCount,
-                                        totalCount: totalCount
-                                    )
-                                } label: {
-                                    HeroTileContent(hero: hero, locked: false)
+                                if hero.isUnlocked {
+                                    // ✅ Unlocked → NavigationLink to detail
+                                    NavigationLink {
+                                        HeroDetailView(
+                                            hero: toDetail(hero),
+                                            collectedCount: collectedCount,
+                                            totalCount: totalCount
+                                        )
+                                    } label: {
+                                        HeroTileContent(hero: hero, locked: false, highlight: highlighted)
+                                    }
+                                    .id(hero.name)
+                                    .buttonStyle(.plain)
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                    .animation(.easeOut(duration: 0.35).delay(0.02 * Double(i)), value: heroes)
+
+                                } else {
+                                    // 🔒 Locked → NavigationLink to locked view
+                                    NavigationLink {
+                                        HeroLockedView(
+                                            heroName: hero.name,
+                                            description: "A mystery waiting to be revealed...",
+                                            questName: "\(hero.name)’s Quest"
+                                        )
+                                    } label: {
+                                        HeroTileContent(hero: hero, locked: true, highlight: highlighted)
+                                    }
+                                    .id(hero.name)
+                                    .buttonStyle(.plain)
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                    .animation(.easeOut(duration: 0.35).delay(0.02 * Double(i)), value: heroes)
                                 }
-                                .buttonStyle(.plain)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                                .animation(.easeOut(duration: 0.35).delay(0.02 * Double(i)), value: heroes)
-
-                            } else {
-                                // 🔒 Locked → NavigationLink to locked view
-                                NavigationLink {
-                                    HeroLockedView(
-                                        heroName: hero.name,
-                                        description: "A mystery waiting to be revealed...",
-                                        questName: "\(hero.name)’s Quest"
-                                    )
-                                } label: {
-                                    HeroTileContent(hero: hero, locked: true)
-                                }
-                                .buttonStyle(.plain)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                                .animation(.easeOut(duration: 0.35).delay(0.02 * Double(i)), value: heroes)
                             }
                         }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 4)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 4)
 
-                    FooterCTA()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 24)
+                        FooterCTA()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 24)
+                    }
+                }
+                .onAppear {
+                    scrollToFocusedHeroIfNeeded(proxy, animated: false)
+                }
+                .onChange(of: heroes) { _, _ in
+                    scrollToFocusedHeroIfNeeded(proxy)
                 }
             }
         }
         .navigationBarBackButtonHidden(false)
+        .onAppear(perform: loadUnlockedHeroes)
     }
 
     // Map an album card → detail screen data
@@ -159,6 +209,170 @@ struct HeroAlbumView: View {
             )
         }
     }
+
+    private func loadUnlockedHeroes() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        Database.database().reference()
+            .child("Users")
+            .child(uid)
+            .observeSingleEvent(of: .value) { snapshot in
+                var unlocked: Set<String> = []
+
+                // Preferred explicit unlock flags (if present).
+                for root in ["HeroAlbumUnlocked", "heroAlbumUnlocked"] {
+                    let explicit = snapshot.childSnapshot(forPath: root)
+                    for child in explicit.children {
+                        guard let snap = child as? DataSnapshot else { continue }
+                        if isTruthy(snap.value) {
+                            unlocked.insert(heroName(forAdventureKey: snap.key) ?? snap.key)
+                        }
+                    }
+                }
+
+                // Fallback: derive unlocks from adventure completion.
+                for root in ["Adventures", "adventures"] {
+                    let adventures = snapshot.childSnapshot(forPath: root)
+                    for child in adventures.children {
+                        guard let snap = child as? DataSnapshot else { continue }
+                        guard let heroName = heroName(forAdventureKey: snap.key) else { continue }
+                        if isAdventureCompleted(adventureKey: snap.key, snapshot: snap) {
+                            unlocked.insert(heroName)
+                        }
+                    }
+                }
+
+                // Explicit safety check for David unlock from Victory flag.
+                if isDavidUnlocked(in: snapshot) {
+                    unlocked.insert("David")
+                }
+
+                DispatchQueue.main.async {
+                    heroes = heroes.map { hero in
+                        var updated = hero
+                        updated.isUnlocked = unlocked.contains(hero.name)
+                        return updated
+                    }
+                }
+            }
+    }
+
+    private func isAdventureCompleted(adventureKey: String, snapshot: DataSnapshot) -> Bool {
+        if isTruthy(snapshot.value) {
+            return true
+        }
+
+        if let explicitKey = completionNodeByAdventure[adventureKey],
+           isTruthy(snapshot.childSnapshot(forPath: explicitKey).value) {
+            return true
+        }
+
+        if isTruthy(snapshot.childSnapshot(forPath: "Victory").value) {
+            return true
+        }
+
+        return false
+    }
+
+    private func isDavidUnlocked(in snapshot: DataSnapshot) -> Bool {
+        let paths = [
+            "Adventures/David/Victory",
+            "Adventures/David/victory",
+            "Adventures/david/Victory",
+            "Adventures/david/victory",
+            "Adventures/DavidAdventure/Victory",
+            "adventures/David/Victory",
+            "adventures/david/victory",
+            "HeroAlbumUnlocked/David",
+            "heroAlbumUnlocked/David",
+            "HeroAlbumUnlocked/david"
+        ]
+        for path in paths where isTruthy(snapshot.childSnapshot(forPath: path).value) {
+            return true
+        }
+        return false
+    }
+
+    private func heroName(forAdventureKey key: String) -> String? {
+        if let mapped = adventureHeroMap[key] {
+            return mapped
+        }
+
+        let normalized = key.lowercased().filter { $0.isLetter || $0.isNumber }
+        switch normalized {
+        case "david", "davidadventure":
+            return "David"
+        case "noah":
+            return "Noah"
+        case "jonah":
+            return "Jonah"
+        case "daniel":
+            return "Daniel"
+        case "esther":
+            return "Esther"
+        case "moses":
+            return "Moses"
+        case "abraham":
+            return "Abraham"
+        case "joseph":
+            return "Joseph"
+        case "mary":
+            return "Mary"
+        case "joshua":
+            return "Joshua"
+        case "deborah":
+            return "Deborah"
+        case "ruth":
+            return "Ruth"
+        case "elijah":
+            return "Elijah"
+        case "elisha":
+            return "Elisha"
+        case "samuel":
+            return "Samuel"
+        case "peter":
+            return "Peter"
+        case "paul":
+            return "Paul"
+        case "marym", "marymagdalene":
+            return "Mary M."
+        case "solomon":
+            return "Solomon"
+        case "jesus":
+            return "Jesus"
+        default:
+            return nil
+        }
+    }
+
+    private func isTruthy(_ value: Any?) -> Bool {
+        if let boolValue = value as? Bool {
+            return boolValue
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let string = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            return string == "true" || string == "1" || string == "yes"
+        }
+        return false
+    }
+
+    private func scrollToFocusedHeroIfNeeded(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        guard let focusedHeroName, !hasAutoScrolledToFocusedHero else { return }
+        guard heroes.contains(where: { $0.name == focusedHeroName }) else { return }
+        hasAutoScrolledToFocusedHero = true
+
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(focusedHeroName, anchor: .center)
+                }
+            } else {
+                proxy.scrollTo(focusedHeroName, anchor: .center)
+            }
+        }
+    }
 }
 
 // MARK: - Background & Header
@@ -188,18 +402,6 @@ private struct DecorBubbles: View {
 private struct Header: View {
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color(hex: "#2C7CF6"))
-                Text("Back")
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundStyle(Color(hex: "#2C7CF6"))
-                Spacer()
-            }
-            .opacity(0.9)
-            .padding(.horizontal, 16)
-
             Text("My Hero\nAlbum")
                 .font(.system(size: 40, weight: .heavy, design: .rounded))
                 .foregroundStyle(Color(hex: "#2C7CF6"))
@@ -220,6 +422,7 @@ private struct Header: View {
 private struct ProgressCard: View {
     let collected: Int
     let total: Int
+    @State private var shinePhase: CGFloat = 0
 
     private var progress: Double { total == 0 ? 0 : Double(collected) / Double(total) }
 
@@ -257,10 +460,49 @@ private struct ProgressCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.8), lineWidth: 2)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(hex: "#F4F8FF"), Color(hex: "#C9D4E9"), Color(hex: "#FFFFFF")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
         )
+        .overlay {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                let travel = w * 1.4
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                Color(hex: "#F5FAFF").opacity(0.55),
+                                Color(hex: "#DDE5F8").opacity(0.28),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: w * 0.42, height: h * 1.6)
+                    .rotationEffect(.degrees(18))
+                    .offset(x: -travel + (travel * 2 * shinePhase))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .allowsHitTesting(false)
+        }
         .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
         .padding(.horizontal, 16)
+        .onAppear {
+            shinePhase = 0
+            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) {
+                shinePhase = 1
+            }
+        }
     }
 }
 
@@ -287,7 +529,7 @@ private struct ProgressBar: View {
 private struct HeroTileContent: View {
     let hero: HeroCard
     let locked: Bool
-    @State private var pressed = false
+    let highlight: Bool
 
     var body: some View {
         let corner: CGFloat = 22
@@ -298,6 +540,10 @@ private struct HeroTileContent: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: corner, style: .continuous)
                         .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .stroke(highlight ? Color(hex: "#FFB34D") : .clear, lineWidth: 4)
                 )
                 .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
 
@@ -352,13 +598,6 @@ private struct HeroTileContent: View {
                 .allowsHitTesting(false)
         }
         .frame(height: 150)
-        .scaleEffect(pressed ? 0.97 : 1)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: pressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in pressed = true }
-                .onEnded { _ in pressed = false }
-        )
     }
 }
 
