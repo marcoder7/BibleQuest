@@ -395,7 +395,7 @@ private struct HeroPanelCard: View {
 
             Text(hero.name)
                 .font(BQAFont.heavy(30))
-                .foregroundStyle(Color(hex: "#1F6FE5"))
+                .foregroundStyle(Color.bqTitle)
 
             HStack {
                 Image(systemName: "star.fill").foregroundStyle(.white)
@@ -437,10 +437,10 @@ private struct VerseCard: View {
             HStack(spacing: 10) {
                 Image(systemName: "book.closed")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Color(hex: "#1F6FE5"))
+                    .foregroundStyle(Color.bqTitle)
                 Text("Bible Verse")
                     .font(BQAFont.heavy(22))
-                    .foregroundStyle(Color(hex: "#1F6FE5"))
+                    .foregroundStyle(Color.bqTitle)
                 Spacer()
             }
             Text("“\(verse)”")
@@ -474,7 +474,7 @@ private struct StoryCard: View {
                     .foregroundStyle(Color(hex: "#FF8A3C"))
                 Text(title)
                     .font(BQAFont.heavy(22))
-                    .foregroundStyle(Color(hex: "#1F6FE5"))
+                    .foregroundStyle(Color.bqTitle)
                 Spacer()
             }
             Text(text)

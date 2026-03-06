@@ -162,7 +162,7 @@ struct VerseView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex:"#CFEAFF"), Color(hex:"#E8F2FF")],
+            LinearGradient(colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
@@ -175,15 +175,15 @@ struct VerseView: View {
                     VStack(spacing: 8) {
                         Text("Today’s Verse")
                             .font(VerseFont.display(44))
-                            .foregroundStyle(Color(hex:"#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                         Text("Power-Up!")
                             .font(VerseFont.display(44))
-                            .foregroundStyle(Color(hex:"#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                             .padding(.top, -8)
 
                         Text("God’s Word is your superpower! ⚡️")
                             .font(VerseFont.body(20))
-                            .foregroundStyle(Color(hex:"#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 12)
                     .padding(.horizontal, 18)
@@ -433,13 +433,13 @@ private struct StreakBanner: View {
                 Text("Power-Up Streak: \(days) Day\(days == 1 ? "" : "s")!")
             }
             .font(VerseFont.display(22))
-            .foregroundStyle(Color(hex:"#1F6FE5"))
+            .foregroundStyle(Color.bqTitle)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.bqCardSurface)
                 .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
         )
     }

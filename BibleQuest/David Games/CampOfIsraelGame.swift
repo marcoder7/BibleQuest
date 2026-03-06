@@ -73,7 +73,7 @@ struct CampOfIsraelGame: View {
                         .ignoresSafeArea()
                 } else {
                     LinearGradient(
-                        colors: [Color(hex:"#CFEAFF"), Color(hex:"#E8F2FF")],
+                        colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                         startPoint: .top, endPoint: .bottom
                     )
                     .ignoresSafeArea()
@@ -159,7 +159,7 @@ struct CampOfIsraelGame: View {
                 if showWin {
                     ZStack {
                         LinearGradient(
-                            colors: [Color(hex:"#CFEAFF"), Color(hex:"#FFB6B9")],
+                            colors: [Color.bqBackgroundTop, Color(hex:"#FFB6B9")],
                             startPoint: .top, endPoint: .bottom
                         )
                         .ignoresSafeArea()
@@ -259,7 +259,7 @@ private struct FaithMeter: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.white.opacity(0.25))
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex:"#6ED47A"), Color(hex:"#1F6FE5")],
+                    .fill(LinearGradient(colors: [Color(hex:"#6ED47A"), Color.bqTitle],
                                          startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(0, geo.size.width * CGFloat(value) / CGFloat(max(total, 1))))
                     .animation(.easeInOut(duration: 0.35), value: value)

@@ -14,12 +14,16 @@ struct ValleyOfElahGame: View {
     @State private var isFalling = false
     @State private var verses: [FloatingWord] = []
     @State private var doubts: [FloatingWord] = []
+    @State private var gameTimer: Timer?
+    @State private var tiltBaselineX: CGFloat = 0
+    @State private var hasCalibratedTilt = false
     
     private let motionManager = CMMotionManager()
     private let sfx = FaithSoundPlayer()
     
     private let moveSpeed: CGFloat = 0.004 // upward speed
-    private let fallThreshold: CGFloat = 0.8 // max tilt before falling
+    private let fallThreshold: CGFloat = 0.72 // lower threshold = a bit harder
+    private let tiltSensitivity: CGFloat = 1.8
     
     var body: some View {
         GeometryReader { geo in
@@ -29,15 +33,16 @@ struct ValleyOfElahGame: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
                     .ignoresSafeArea()
                     .overlay(Color.black.opacity(0.15))
                 
                 // ✨ Floating words (faith/doubt)
                 ForEach(verses) { verse in
-                    FloatingText(word: verse, color: .yellow)
+                    FloatingText(word: verse, color: .yellow, containerSize: geo.size)
                 }
                 ForEach(doubts) { doubt in
-                    FloatingText(word: doubt, color: .red)
+                    FloatingText(word: doubt, color: .red, containerSize: geo.size)
                 }
                 
                 // 🧍‍♂️ David (the balance)
@@ -51,25 +56,19 @@ struct ValleyOfElahGame: View {
                     .animation(.easeOut(duration: 0.1), value: davidX)
                     .animation(.linear(duration: 0.05), value: davidY)
                     .shadow(radius: 10)
-                    .onTapGesture {
-                        if isFalling { resetGame() }
-                    }
                 
-                // 👇 “Tap to try again” if fallen
+                // 👇 Fail popup
                 if isFalling {
-                    VStack {
-                        Text("😵 David fell! Tap to try again.")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .shadow(radius: 4)
-                    }
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                    FailOverlay(onPlayAgain: retryGame, onBack: { dismiss() })
+                        .padding(.horizontal, 24)
                     .transition(.opacity)
                 }
                 
                 // 🏁 Win screen
                 if showWin {
                     ZStack {
-                        LinearGradient(colors: [Color(hex:"#CFEAFF"), Color(hex:"#FFB6B9")],
+                        LinearGradient(colors: [Color.bqBackgroundTop, Color(hex:"#FFB6B9")],
                                        startPoint: .top, endPoint: .bottom)
                         .ignoresSafeArea()
                         
@@ -148,49 +147,75 @@ struct ValleyOfElahGame: View {
     
     // MARK: - Game Flow
     private func startGame() {
+        gameTimer?.invalidate()
+        motionManager.stopAccelerometerUpdates()
+
         showIntro = false
         isFalling = false
         showWin = false
         davidX = 0
         davidY = 0
+        tiltBaselineX = 0
+        hasCalibratedTilt = false
+        verses.removeAll()
+        doubts.removeAll()
         sfx.playStart()
         
         if motionManager.isAccelerometerAvailable {
             motionManager.accelerometerUpdateInterval = 1/60
             motionManager.startAccelerometerUpdates(to: .main) { data, _ in
                 guard let accel = data?.acceleration else { return }
-                let tilt = CGFloat(accel.x)
-                davidX = (davidX - tilt * 0.4).clamped(to: -1.2...1.2)
+
+                // Calibrate "neutral" hold position when the game starts.
+                if !hasCalibratedTilt {
+                    tiltBaselineX = CGFloat(accel.x)
+                    hasCalibratedTilt = true
+                }
+
+                let delta = CGFloat(accel.x) - tiltBaselineX
+                // Device tilt now matches on-screen direction (not inverted).
+                let targetX = (delta * tiltSensitivity).clamped(to: -1.0...1.0)
+
+                // Damp motion so small sensor noise does not cause runaway tilt.
+                davidX = (davidX * 0.70 + targetX * 0.30).clamped(to: -1.2...1.2)
             }
         }
         
-        Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { timer in
-            guard !showWin, !isFalling else { timer.invalidate(); return }
+        gameTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { timer in
+            guard !showWin, !isFalling else {
+                timer.invalidate()
+                gameTimer = nil
+                return
+            }
             
             davidY += moveSpeed
             
             // Add some random push from "doubts"
-            if Int.random(in: 0...30) == 0 {
-                let push = CGFloat.random(in: -0.4...0.4)
-                davidX += push * 0.2
+            if Int.random(in: 0...24) == 0 {
+                let push = CGFloat.random(in: -0.5...0.5)
+                davidX += push * 0.24
                 spawnWord(faith: push > 0)
             }
             
             // Win
             if davidY >= 0.9 {
                 timer.invalidate()
+                gameTimer = nil
                 winGame()
             }
             
             // Fail
             if abs(davidX) > fallThreshold {
                 timer.invalidate()
+                gameTimer = nil
                 fallDown()
             }
         }
     }
     
     private func winGame() {
+        gameTimer?.invalidate()
+        gameTimer = nil
         motionManager.stopAccelerometerUpdates()
         sfx.success()
         withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) {
@@ -199,15 +224,23 @@ struct ValleyOfElahGame: View {
     }
     
     private func fallDown() {
+        gameTimer?.invalidate()
+        gameTimer = nil
         motionManager.stopAccelerometerUpdates()
         sfx.fail()
         withAnimation(.easeIn(duration: 0.6)) {
             isFalling = true
-            davidY = -0.4
         }
+    }
+
+    private func retryGame() {
+        startGame()
     }
     
     private func resetGame() {
+        gameTimer?.invalidate()
+        gameTimer = nil
+        motionManager.stopAccelerometerUpdates()
         showIntro = true
         showWin = false
         isFalling = false
@@ -265,14 +298,15 @@ private struct FloatingWord: Identifiable {
 private struct FloatingText: View {
     let word: FloatingWord
     let color: Color
+    let containerSize: CGSize
     var body: some View {
         Text(word.text)
             .font(.system(size: 20, weight: .semibold, design: .rounded))
             .foregroundStyle(color.opacity(0.95))
             .shadow(color: .black.opacity(0.4), radius: 3, x: 0, y: 2)
             .position(
-                x: UIScreen.main.bounds.width * word.x,
-                y: UIScreen.main.bounds.height * word.y
+                x: containerSize.width * word.x,
+                y: containerSize.height * word.y
             )
             .animation(.easeOut(duration: 4), value: word.y)
     }
@@ -301,4 +335,59 @@ final class FaithSoundPlayer {
 // MARK: - Preview
 #Preview {
     ValleyOfElahGame()
+}
+
+private struct FailOverlay: View {
+    var onPlayAgain: () -> Void
+    var onBack: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("😵 You Lost Balance")
+                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("David toppled in the valley. Try again and keep him steady.")
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(.white.opacity(0.95))
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 14) {
+                Button(action: onBack) {
+                    HStack {
+                        Image(systemName: "arrow.left")
+                        Text("Adventures")
+                    }
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.6), lineWidth: 1.5))
+                }
+
+                Button(action: onPlayAgain) {
+                    HStack {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Play Again")
+                    }
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.6), lineWidth: 1.5))
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 20)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.55), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 12)
+    }
 }

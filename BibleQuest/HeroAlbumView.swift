@@ -212,49 +212,63 @@ struct HeroAlbumView: View {
 
     private func loadUnlockedHeroes() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
+        let ref = Database.database().reference()
+        let paths = [ref.child("Users").child(uid), ref.child(uid)]
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var unlocked: Set<String> = []
 
-        Database.database().reference()
-            .child("Users")
-            .child(uid)
-            .observeSingleEvent(of: .value) { snapshot in
-                var unlocked: Set<String> = []
+        for path in paths {
+            group.enter()
+            path.observeSingleEvent(of: .value, with: { snapshot in
+                let found = unlockedHeroes(from: snapshot)
+                lock.lock()
+                unlocked.formUnion(found)
+                lock.unlock()
+                group.leave()
+            }, withCancel: { _ in
+                group.leave()
+            })
+        }
 
-                // Preferred explicit unlock flags (if present).
-                for root in ["HeroAlbumUnlocked", "heroAlbumUnlocked"] {
-                    let explicit = snapshot.childSnapshot(forPath: root)
-                    for child in explicit.children {
-                        guard let snap = child as? DataSnapshot else { continue }
-                        if isTruthy(snap.value) {
-                            unlocked.insert(heroName(forAdventureKey: snap.key) ?? snap.key)
-                        }
-                    }
-                }
+        group.notify(queue: .main) {
+            heroes = heroes.map { hero in
+                var updated = hero
+                updated.isUnlocked = unlocked.contains(hero.name)
+                return updated
+            }
+        }
+    }
 
-                // Fallback: derive unlocks from adventure completion.
-                for root in ["Adventures", "adventures"] {
-                    let adventures = snapshot.childSnapshot(forPath: root)
-                    for child in adventures.children {
-                        guard let snap = child as? DataSnapshot else { continue }
-                        guard let heroName = heroName(forAdventureKey: snap.key) else { continue }
-                        if isAdventureCompleted(adventureKey: snap.key, snapshot: snap) {
-                            unlocked.insert(heroName)
-                        }
-                    }
-                }
+    private func unlockedHeroes(from snapshot: DataSnapshot) -> Set<String> {
+        var unlocked: Set<String> = []
 
-                // Explicit safety check for David unlock from Victory flag.
-                if isDavidUnlocked(in: snapshot) {
-                    unlocked.insert("David")
-                }
-
-                DispatchQueue.main.async {
-                    heroes = heroes.map { hero in
-                        var updated = hero
-                        updated.isUnlocked = unlocked.contains(hero.name)
-                        return updated
-                    }
+        for root in ["HeroAlbumUnlocked", "heroAlbumUnlocked"] {
+            let explicit = snapshot.childSnapshot(forPath: root)
+            for child in explicit.children {
+                guard let snap = child as? DataSnapshot else { continue }
+                if isTruthy(snap.value) {
+                    unlocked.insert(heroName(forAdventureKey: snap.key) ?? snap.key)
                 }
             }
+        }
+
+        for root in ["Adventure", "Adventures", "adventure", "adventures"] {
+            let adventures = snapshot.childSnapshot(forPath: root)
+            for child in adventures.children {
+                guard let snap = child as? DataSnapshot else { continue }
+                guard let heroName = heroName(forAdventureKey: snap.key) else { continue }
+                if isAdventureCompleted(adventureKey: snap.key, snapshot: snap) {
+                    unlocked.insert(heroName)
+                }
+            }
+        }
+
+        if isDavidUnlocked(in: snapshot) {
+            unlocked.insert("David")
+        }
+
+        return unlocked
     }
 
     private func isAdventureCompleted(adventureKey: String, snapshot: DataSnapshot) -> Bool {
@@ -262,12 +276,16 @@ struct HeroAlbumView: View {
             return true
         }
 
-        if let explicitKey = completionNodeByAdventure[adventureKey],
+        let canonicalKey = heroName(forAdventureKey: adventureKey) ?? adventureKey
+        if let explicitKey = completionNodeByAdventure[canonicalKey],
            isTruthy(snapshot.childSnapshot(forPath: explicitKey).value) {
             return true
         }
 
         if isTruthy(snapshot.childSnapshot(forPath: "Victory").value) {
+            return true
+        }
+        if isTruthy(snapshot.childSnapshot(forPath: "victory").value) {
             return true
         }
 
@@ -276,6 +294,12 @@ struct HeroAlbumView: View {
 
     private func isDavidUnlocked(in snapshot: DataSnapshot) -> Bool {
         let paths = [
+            "Adventure/David/Victory",
+            "Adventure/David/victory",
+            "Adventure/david/Victory",
+            "Adventure/david/victory",
+            "adventure/David/Victory",
+            "adventure/david/victory",
             "Adventures/David/Victory",
             "Adventures/David/victory",
             "Adventures/david/Victory",
@@ -294,11 +318,15 @@ struct HeroAlbumView: View {
     }
 
     private func heroName(forAdventureKey key: String) -> String? {
-        if let mapped = adventureHeroMap[key] {
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let mapped = adventureHeroMap[trimmedKey] {
+            return mapped
+        }
+        if let mapped = adventureHeroMap.first(where: { $0.key.caseInsensitiveCompare(trimmedKey) == .orderedSame })?.value {
             return mapped
         }
 
-        let normalized = key.lowercased().filter { $0.isLetter || $0.isNumber }
+        let normalized = trimmedKey.lowercased().filter { $0.isLetter || $0.isNumber }
         switch normalized {
         case "david", "davidadventure":
             return "David"
@@ -380,7 +408,7 @@ struct HeroAlbumView: View {
 private struct BackgroundGradient: View {
     var body: some View {
         LinearGradient(
-            colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+            colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
             startPoint: .top, endPoint: .bottom
         )
         .ignoresSafeArea()
@@ -409,7 +437,7 @@ private struct Header: View {
 
             Text("Collect them all, live their values! ⚡️")
                 .font(.system(.title3, design: .rounded))
-                .foregroundStyle(Color(hex: "#6C7A99"))
+                .foregroundStyle(Color.bqSubtitle)
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 6)
         }
@@ -422,7 +450,6 @@ private struct Header: View {
 private struct ProgressCard: View {
     let collected: Int
     let total: Int
-    @State private var shinePhase: CGFloat = 0
 
     private var progress: Double { total == 0 ? 0 : Double(collected) / Double(total) }
 
@@ -474,35 +501,35 @@ private struct ProgressCard: View {
                 let w = geo.size.width
                 let h = geo.size.height
                 let travel = w * 1.4
+                let cycle: Double = 2.6
 
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                Color(hex: "#F5FAFF").opacity(0.55),
-                                Color(hex: "#DDE5F8").opacity(0.28),
-                                .clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                TimelineView(.animation) { timeline in
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    let phase = CGFloat((t.truncatingRemainder(dividingBy: cycle)) / cycle)
+
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color(hex: "#F5FAFF").opacity(0.55),
+                                    Color(hex: "#DDE5F8").opacity(0.28),
+                                    .clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
-                    .frame(width: w * 0.42, height: h * 1.6)
-                    .rotationEffect(.degrees(18))
-                    .offset(x: -travel + (travel * 2 * shinePhase))
+                        .frame(width: w * 0.42, height: h * 1.6)
+                        .rotationEffect(.degrees(18))
+                        .offset(x: -travel + (travel * 2 * phase))
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
         .padding(.horizontal, 16)
-        .onAppear {
-            shinePhase = 0
-            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) {
-                shinePhase = 1
-            }
-        }
     }
 }
 
@@ -552,7 +579,7 @@ private struct HeroTileContent: View {
                     Text(hero.emoji).font(.system(size: 40))
                     Text(hero.name)
                         .font(.system(size: 18, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color(hex: "#1F6FE5"))
+                        .foregroundStyle(Color.bqTitle)
                     Text(hero.value)
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.secondary)

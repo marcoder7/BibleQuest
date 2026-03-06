@@ -216,52 +216,74 @@ struct HeroLockedView: View {
 
     private func loadAlbumProgress() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        Database.database().reference()
-            .child("Users")
-            .child(uid)
-            .observeSingleEvent(of: .value) { snapshot in
-                var unlocked: Set<String> = []
+        let ref = Database.database().reference()
+        let paths = [ref.child("Users").child(uid), ref.child(uid)]
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var unlocked: Set<String> = []
 
-                for root in ["HeroAlbumUnlocked", "heroAlbumUnlocked"] {
-                    let explicit = snapshot.childSnapshot(forPath: root)
-                    for child in explicit.children {
-                        guard let snap = child as? DataSnapshot else { continue }
-                        if isTruthy(snap.value) {
-                            unlocked.insert(heroName(forAdventureKey: snap.key) ?? snap.key)
-                        }
-                    }
-                }
+        for path in paths {
+            group.enter()
+            path.observeSingleEvent(of: .value, with: { snapshot in
+                let found = unlockedHeroes(from: snapshot)
+                lock.lock()
+                unlocked.formUnion(found)
+                lock.unlock()
+                group.leave()
+            }, withCancel: { _ in
+                group.leave()
+            })
+        }
 
-                for root in ["Adventures", "adventures"] {
-                    let adventures = snapshot.childSnapshot(forPath: root)
-                    for child in adventures.children {
-                        guard let snap = child as? DataSnapshot else { continue }
-                        guard let heroName = heroName(forAdventureKey: snap.key) else { continue }
-                        if isAdventureCompleted(adventureKey: snap.key, snapshot: snap) {
-                            unlocked.insert(heroName)
-                        }
-                    }
-                }
+        group.notify(queue: .main) {
+            unlockedCount = min(totalHeroes, unlocked.count)
+        }
+    }
 
-                if isDavidUnlocked(in: snapshot) {
-                    unlocked.insert("David")
-                }
+    private func unlockedHeroes(from snapshot: DataSnapshot) -> Set<String> {
+        var unlocked: Set<String> = []
 
-                DispatchQueue.main.async {
-                    unlockedCount = min(totalHeroes, unlocked.count)
+        for root in ["HeroAlbumUnlocked", "heroAlbumUnlocked"] {
+            let explicit = snapshot.childSnapshot(forPath: root)
+            for child in explicit.children {
+                guard let snap = child as? DataSnapshot else { continue }
+                if isTruthy(snap.value) {
+                    unlocked.insert(heroName(forAdventureKey: snap.key) ?? snap.key)
                 }
             }
+        }
+
+        for root in ["Adventure", "Adventures", "adventure", "adventures"] {
+            let adventures = snapshot.childSnapshot(forPath: root)
+            for child in adventures.children {
+                guard let snap = child as? DataSnapshot else { continue }
+                guard let heroName = heroName(forAdventureKey: snap.key) else { continue }
+                if isAdventureCompleted(adventureKey: snap.key, snapshot: snap) {
+                    unlocked.insert(heroName)
+                }
+            }
+        }
+
+        if isDavidUnlocked(in: snapshot) {
+            unlocked.insert("David")
+        }
+
+        return unlocked
     }
 
     private func isAdventureCompleted(adventureKey: String, snapshot: DataSnapshot) -> Bool {
         if isTruthy(snapshot.value) {
             return true
         }
-        if let explicitKey = completionNodeByAdventure[adventureKey],
+        let canonicalKey = heroName(forAdventureKey: adventureKey) ?? adventureKey
+        if let explicitKey = completionNodeByAdventure[canonicalKey],
            isTruthy(snapshot.childSnapshot(forPath: explicitKey).value) {
             return true
         }
         if isTruthy(snapshot.childSnapshot(forPath: "Victory").value) {
+            return true
+        }
+        if isTruthy(snapshot.childSnapshot(forPath: "victory").value) {
             return true
         }
         return false
@@ -269,6 +291,12 @@ struct HeroLockedView: View {
 
     private func isDavidUnlocked(in snapshot: DataSnapshot) -> Bool {
         let paths = [
+            "Adventure/David/Victory",
+            "Adventure/David/victory",
+            "Adventure/david/Victory",
+            "Adventure/david/victory",
+            "adventure/David/Victory",
+            "adventure/david/victory",
             "Adventures/David/Victory",
             "Adventures/David/victory",
             "Adventures/david/Victory",
@@ -287,11 +315,15 @@ struct HeroLockedView: View {
     }
 
     private func heroName(forAdventureKey key: String) -> String? {
-        if let mapped = adventureHeroMap[key] {
+        let trimmedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let mapped = adventureHeroMap[trimmedKey] {
+            return mapped
+        }
+        if let mapped = adventureHeroMap.first(where: { $0.key.caseInsensitiveCompare(trimmedKey) == .orderedSame })?.value {
             return mapped
         }
 
-        let normalized = key.lowercased().filter { $0.isLetter || $0.isNumber }
+        let normalized = trimmedKey.lowercased().filter { $0.isLetter || $0.isNumber }
         switch normalized {
         case "david", "davidadventure":
             return "David"

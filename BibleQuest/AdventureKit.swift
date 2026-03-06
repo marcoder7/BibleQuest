@@ -83,13 +83,14 @@ struct LocationPin: View {
 
             Text(node.title)
                 .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.bqInputText)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
-                    Capsule(style: .continuous).fill(Color.white.opacity(0.9))
+                    Capsule(style: .continuous).fill(Color.bqCardSurfaceSoft.opacity(0.92))
                 )
                 .overlay(
-                    Capsule().stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    Capsule().stroke(Color.bqCardBorder.opacity(0.5), lineWidth: 1)
                 )
         }
         .frame(width: 170)

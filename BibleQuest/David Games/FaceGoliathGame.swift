@@ -429,7 +429,7 @@ private struct FaceGoliathBackground: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )

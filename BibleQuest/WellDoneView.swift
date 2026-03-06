@@ -58,8 +58,8 @@ struct WellDoneView: View {
                     .foregroundStyle(.white.opacity(0.95))
 
                 HStack(spacing: 24) {
-                    Button(action: onPlayAgain) {
-                        HStack { Image(systemName: "star.fill"); Text("Play Again") }
+                    Button(action: onBack) {
+                        HStack { Image(systemName: "arrow.left"); Text("Adventures") }
                             .font(.system(.headline, design: .rounded))
                             .padding(.horizontal, 24).padding(.vertical, 14)
                             .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 20))
@@ -67,8 +67,8 @@ struct WellDoneView: View {
                             .foregroundStyle(.white)
                     }
 
-                    Button(action: onBack) {
-                        HStack { Image(systemName: "arrow.left"); Text("Adventures") }
+                    Button(action: onPlayAgain) {
+                        HStack { Image(systemName: "star.fill"); Text("Play Again") }
                             .font(.system(.headline, design: .rounded))
                             .padding(.horizontal, 24).padding(.vertical, 14)
                             .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 20))

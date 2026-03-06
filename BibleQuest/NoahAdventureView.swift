@@ -55,7 +55,7 @@ struct NoahAdventureView: View {
                 .hidden()
 
                 // Background
-                LinearGradient(colors: [Color(hex:"#E0F7FA"), Color(hex:"#E1F5FE")],
+                LinearGradient(colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                                startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
 
@@ -117,14 +117,26 @@ struct NoahAdventureView: View {
 
                 // Top UI
                 VStack(spacing: 10) {
-                    Text("\(userName)’s Adventure")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color(hex:"#00695C"))
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    VStack(spacing: 6) {
+                        Text("\(userName)’s Adventure")
+                            .font(.system(size: 28, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.bqTitle)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
 
-                    Text("Follow the quest and tap locations for story hints.")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(Color(hex:"#455A64"))
+                        Text("Follow the quest and tap locations for story hints.")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.bqSubtitle)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.bqCardSurface.opacity(0.72))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.bqCardBorder.opacity(0.5), lineWidth: 1)
+                            )
+                    )
 
                     Spacer()
 

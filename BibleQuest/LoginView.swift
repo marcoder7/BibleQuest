@@ -127,7 +127,7 @@ struct LoginView: View {
 
 private struct BackgroundDecor: View {
     private let bg = LinearGradient(
-        colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+        colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
         startPoint: .top, endPoint: .bottom
     )
     var body: some View {
@@ -161,7 +161,7 @@ private struct TitleBlock: View {
 
             Text("BibleQuest")
                 .font(.system(size: 44, weight: .heavy, design: .rounded))
-                .foregroundStyle(Color(hex: "#1F6FE5"))
+                .foregroundStyle(Color.bqTitle)
                 .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 2)
 
             Text("Adventures")
@@ -171,7 +171,7 @@ private struct TitleBlock: View {
 
             Text("Play the Stories. Live the Values.")
                 .font(.system(.title3, design: .rounded))
-                .foregroundStyle(Color(hex: "#6C7A99"))
+                .foregroundStyle(Color.bqSubtitle)
                 .padding(.top, 2)
         }
     }
@@ -211,11 +211,11 @@ private struct LoginCard: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .fill(Color.white.opacity(0.72))
+            .fill(Color.bqCardSurface.opacity(0.80))
     }
     private var cardStroke: some View {
         RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .stroke(Color.white.opacity(0.65), lineWidth: 1)
+            .stroke(Color.bqCardBorder.opacity(0.45), lineWidth: 1)
     }
 
     var body: some View {
@@ -262,12 +262,12 @@ private struct NeumorphicPill: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.black.opacity(0.45))
+                    .foregroundStyle(Color.bqInputIcon)
 
                 Text(title)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.black.opacity(0.55))
+                    .foregroundStyle(Color.bqInputText)
             }
             // Center the contents in the pill
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
@@ -275,16 +275,16 @@ private struct NeumorphicPill: View {
         }
         .buttonStyle(.plain)
         .background(
-            LinearGradient(colors: [Color.white, Color(hex: "#F6F8FF")],
+            LinearGradient(colors: [Color.bqCardSurface, Color.bqCardSurfaceSoft],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.95), lineWidth: 1)
+                .stroke(Color.bqCardBorder.opacity(0.6), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 8)
-        .shadow(color: .white.opacity(0.9), radius: 8,  x: 0, y: -2)
+        .shadow(color: Color.bqCardBorder.opacity(0.35), radius: 8,  x: 0, y: -2)
     }
 }
 
@@ -294,17 +294,17 @@ private struct DividerTag: View {
     let label: String
     var body: some View {
         HStack(spacing: 10) {
-            Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+            Rectangle().fill(Color.bqDivider.opacity(0.24)).frame(height: 1)
             Text(label)
                 .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(Color.black.opacity(0.70))
+                .foregroundStyle(Color.bqInputIcon)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Color.white.opacity(0.98))
+                .background(Color.bqCardSurface.opacity(0.98))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .fixedSize(horizontal: true, vertical: false) // <- don’t truncate
                 .layoutPriority(1)
-            Rectangle().fill(Color.black.opacity(0.08)).frame(height: 1)
+            Rectangle().fill(Color.bqDivider.opacity(0.24)).frame(height: 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -318,24 +318,24 @@ private struct EmailField: View {
         HStack(spacing: 10) {
             Image(systemName: "envelope")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color(hex: "#6C7A99"))
+                .foregroundStyle(Color.bqInputIcon)
 
             TextField("your@email.com", text: $email)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
                 .autocorrectionDisabled()
                 .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color(hex: "#4B5975"))
+                .foregroundStyle(Color.bqInputText)
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.75))
+                .fill(Color.bqCardSurfaceSoft.opacity(0.86))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                .stroke(Color.bqCardBorder.opacity(0.35), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
     }
@@ -357,14 +357,14 @@ private struct PasswordField: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .font(.system(.body, design: .rounded))
-            .foregroundStyle(Color(hex: "#4B5975"))
+            .foregroundStyle(Color.bqInputText)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { showPassword.toggle() }
             } label: {
                 Image(systemName: showPassword ? "eye.slash" : "eye")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#6C7A99"))
+                    .foregroundStyle(Color.bqInputIcon)
             }
             .contentShape(Rectangle())
             .padding(.trailing, 2)
@@ -373,11 +373,11 @@ private struct PasswordField: View {
         .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.75))
+                .fill(Color.bqCardSurfaceSoft.opacity(0.86))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                .stroke(Color.bqCardBorder.opacity(0.35), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
     }
@@ -413,7 +413,7 @@ private struct FooterNote: View {
     var body: some View {
         Text("Ready to explore amazing Bible stories? Let's go on an adventure! ✨")
             .font(.system(.footnote, design: .rounded))
-            .foregroundStyle(Color(hex: "#6C7A99"))
+            .foregroundStyle(Color.bqSubtitle)
             .multilineTextAlignment(.center)
     }
 }

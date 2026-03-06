@@ -130,7 +130,7 @@ struct DavidAdventureView: View {
                 ) { EmptyView() }.hidden()
 
                 // Background
-                LinearGradient(colors: [Color(hex:"#CFEAFF"), Color(hex:"#E8F2FF")],
+                LinearGradient(colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                                startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
 
@@ -168,18 +168,18 @@ struct DavidAdventureView: View {
                                         progress: progress,
                                         nodes: nodes,
                                         mapHeight: mapHeight)
-                                .onChange(of: progress) { _, newVal in
-                                    let pos = positionAlongPath(progress: newVal, nodes: nodes)
-                                    currentAnchorY = pos.y
-                                    autoScrollIfNeeded(proxy: proxy, to: pos.y)
-                                }
 
-                            GeometryReader { _ in
+                            VStack(spacing: 0) {
+                                Spacer()
+                                    .frame(height: currentAnchorY.clamped(to: 0...(mapHeight - 1)))
+
                                 Color.clear
                                     .frame(height: 1)
                                     .id("anchor")
-                                    .offset(y: currentAnchorY)
+
+                                Spacer(minLength: 0)
                             }
+                            .frame(height: mapHeight)
                         }
                         .frame(height: mapHeight)
                         .padding(.horizontal, 18)
@@ -193,24 +193,54 @@ struct DavidAdventureView: View {
                         lastAutoScrollY = -1000
                         proxy.scrollTo("anchor", anchor: .center)
                     }
+                    .onChange(of: progress) { _, newVal in
+                        let pos = positionAlongPath(progress: newVal, nodes: nodes)
+                        currentAnchorY = pos.y
+                        autoScrollIfNeeded(proxy: proxy, to: pos.y)
+                    }
+                    .onChange(of: hasLoadedAdventureState) { _, loaded in
+                        guard loaded else { return }
+                        let pos = positionAlongPath(progress: progress, nodes: nodes)
+                        currentAnchorY = pos.y
+                        lastAutoScrollY = -1000
+                        DispatchQueue.main.async {
+                            var transaction = Transaction()
+                            transaction.animation = .easeOut(duration: 0.22)
+                            withTransaction(transaction) {
+                                proxy.scrollTo("anchor", anchor: .center)
+                            }
+                        }
+                    }
                 }
 
                 // Top UI
                 VStack(spacing: 10) {
-                    Text("David's Adventure")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color(hex:"#1F6FE5"))
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    VStack(spacing: 6) {
+                        Text("David's Adventure")
+                            .font(.system(size: 28, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.bqTitle)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
 
-                    Text("Follow the quest and tap locations for story hints.")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(Color(hex:"#6C7A99"))
+                        Text("Follow the quest and tap locations for story hints.")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.bqSubtitle)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.bqCardSurface.opacity(0.72))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.bqCardBorder.opacity(0.5), lineWidth: 1)
+                            )
+                    )
 
                     Spacer()
 
                     HStack(spacing: 12) {
                         Button { jump(to: 0.0) } label: {
-                            ControlPill(icon: "arrow.uturn.backward", title: "Start")
+                            ControlPill(icon: "arrow.uturn.backward", title: "Restart")
                         }
                         Button { toggleWalk() } label: {
                             ControlPill(icon: isWalking ? "pause.fill" : "play.fill",
@@ -297,29 +327,51 @@ struct DavidAdventureView: View {
                 var completed: Set<String> = []
                 for child in snapshot.children {
                     if let snap = child as? DataSnapshot,
-                       let val = snap.value as? Bool, val {
+                       isTruthyValue(snap.value) {
                         completed.insert(snap.key)
                     }
                 }
-                let savedProgress = (snapshot.childSnapshot(forPath: "Progress").value as? NSNumber).map {
-                    CGFloat(truncating: $0).clamped(to: 0...1)
-                }
-
-                self.completedGames = completed
-                if !hasLoadedAdventureState {
-                    let unlockedProgress = latestAccessibleProgress(using: completed)
-                    let restored: CGFloat
-                    if let savedProgress {
-                        restored = min(savedProgress, unlockedProgress)
-                    } else {
-                        restored = unlockedProgress
+                let savedProgressRaw = snapshot.childSnapshot(forPath: "Progress").value
+                let savedProgress: CGFloat? = {
+                    if let num = savedProgressRaw as? NSNumber {
+                        return CGFloat(truncating: num).clamped(to: 0...1)
                     }
-                    progress = restored.clamped(to: 0...1)
-                    hasLoadedAdventureState = true
-                    saveAdventureProgress(progress)
+                    if let str = savedProgressRaw as? String, let dbl = Double(str) {
+                        return CGFloat(dbl).clamped(to: 0...1)
+                    }
+                    return nil
+                }()
+
+                DispatchQueue.main.async {
+                    self.completedGames = completed
+                    if !hasLoadedAdventureState {
+                        let unlockedProgress = latestAccessibleProgress(using: completed)
+                        let restored: CGFloat
+                        if let savedProgress {
+                            restored = min(savedProgress, unlockedProgress)
+                        } else {
+                            restored = unlockedProgress
+                        }
+                        progress = restored.clamped(to: 0...1)
+                        hasLoadedAdventureState = true
+                        saveAdventureProgress(progress)
+                    }
+                    print("📡 loaded completedGames=\(completed), progress=\(progress)")
                 }
-                print("📡 loaded completedGames=\(completed), progress=\(progress)")
             }
+    }
+
+    private func isTruthyValue(_ value: Any?) -> Bool {
+        if let boolValue = value as? Bool {
+            return boolValue
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        if let string = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            return string == "true" || string == "1" || string == "yes"
+        }
+        return false
     }
 
     private func markGameCompleted(_ nodeTitle: String) {
@@ -652,12 +704,27 @@ private struct DavidTrophyUnlockOverlay: View {
                         .scaleEffect(pulsing ? 1.04 : 0.96)
                         .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
 
-                    Image(systemName: revealed ? "trophy.fill" : "lock.fill")
-                        .font(.system(size: 56, weight: .black))
-                        .foregroundStyle(revealed ? Color(hex: "#8A4B00") : .white)
-                        .scaleEffect(revealed ? 1.04 : 0.86)
-                        .rotationEffect(.degrees(revealed ? 0 : -8))
-                        .animation(.spring(response: 0.34, dampingFraction: 0.78), value: revealed)
+                    if revealed {
+                        if UIImage(named: "rock") != nil {
+                            Image("rock")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 64, height: 64)
+                                .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 2)
+                                .transition(.scale.combined(with: .opacity))
+                        } else {
+                            Text("🪨")
+                                .font(.system(size: 56))
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    } else {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 52, weight: .black))
+                            .foregroundStyle(.white)
+                            .scaleEffect(0.9)
+                            .rotationEffect(.degrees(-8))
+                            .transition(.scale.combined(with: .opacity))
+                    }
 
                     ForEach(0..<8, id: \.self) { idx in
                         Image(systemName: "sparkle")

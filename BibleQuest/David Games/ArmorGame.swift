@@ -133,7 +133,7 @@ struct ArmorGame: View {
                 if showWin {
                     ZStack {
                         LinearGradient(
-                            colors: [Color(hex: "#CFEAFF"), Color(hex: "#FFB6B9")],
+                            colors: [Color.bqBackgroundTop, Color(hex: "#FFB6B9")],
                             startPoint: .top,
                             endPoint: .bottom
                         )

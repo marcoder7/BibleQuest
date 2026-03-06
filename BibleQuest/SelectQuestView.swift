@@ -1,19 +1,6 @@
 import SwiftUI
 
 struct SelectQuestView: View {
-    init() {
-        // 🔹 Set system back button (chevron + text) to white
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithTransparentBackground()
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        UINavigationBar.appearance().compactAppearance = appearance
-        UINavigationBar.appearance().tintColor = .white   // chevron + text
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -95,6 +82,7 @@ struct SelectQuestView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             // 🔹 Removed custom Toolbar back button
         }
     }

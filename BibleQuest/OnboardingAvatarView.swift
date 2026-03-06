@@ -34,7 +34,7 @@ struct OnboardingAvatarView: View {
         NavigationStack {
             ZStack {
                 // Background
-                LinearGradient(colors: [Color(hex:"#CFEAFF"), Color(hex:"#E8F2FF")],
+                LinearGradient(colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                                startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
                     .overlay(FloatingBits().opacity(0.6))
@@ -43,10 +43,10 @@ struct OnboardingAvatarView: View {
                     VStack(spacing: 6) {
                         Text("Choose Your Hero")
                             .font(.system(size: 34, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex:"#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                         Text("Pick an avatar and tell us your name!")
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color(hex:"#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 24)
 
@@ -95,10 +95,10 @@ struct OnboardingAvatarView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Name")
                             .font(.system(size: 34, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex:"#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                         HStack(spacing: 10) {
                             Image(systemName: "pencil")
-                                .foregroundStyle(Color(hex:"#1F6FE5").opacity(0.9))
+                                .foregroundStyle(Color.bqTitle.opacity(0.9))
                             TextField("Type your name...", text: $name)
                                 .textInputAutocapitalization(.words)
                                 .submitLabel(.done)
@@ -108,7 +108,7 @@ struct OnboardingAvatarView: View {
                         .frame(height: 52)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(.white)
+                                .fill(Color.bqCardSurface)
                                 .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
                         )
                     }

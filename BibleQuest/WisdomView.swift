@@ -43,7 +43,7 @@ struct WisdomView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -54,11 +54,11 @@ struct WisdomView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Wisdom")
                             .font(.system(size: 36, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
 
                         Text("Simple truth for everyday choices.")
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 18)
 
@@ -69,11 +69,11 @@ struct WisdomView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Wisdom Games")
                             .font(.system(size: 30, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
 
                         Text("Play and learn with Bible-themed alphabet, numbers, and words.")
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
 
                         NavigationLink {
                             AlphabetWisdomGameView()
@@ -115,7 +115,7 @@ struct WisdomView: View {
 
                     Text("Keep this page close when you need direction.")
                         .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(Color(hex: "#6C7A99"))
+                        .foregroundStyle(Color.bqSubtitle)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 8)
                         .padding(.bottom, 24)
@@ -304,7 +304,7 @@ private struct BibleQuizGameView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -315,10 +315,10 @@ private struct BibleQuizGameView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("\(icon) \(title)")
                             .font(.system(size: 34, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                         Text(subtitle)
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 16)
 
@@ -326,10 +326,10 @@ private struct BibleQuizGameView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Great Job!")
                                 .font(.system(size: 28, weight: .heavy, design: .rounded))
-                                .foregroundStyle(Color(hex: "#1F6FE5"))
+                                .foregroundStyle(Color.bqTitle)
                             Text("Your score: \(score) / \(questions.count)")
                                 .font(.system(.title3, design: .rounded))
-                                .foregroundStyle(Color(hex: "#4B5975"))
+                                .foregroundStyle(Color.bqBody)
 
                             Button {
                                 currentIndex = 0
@@ -360,12 +360,12 @@ private struct BibleQuizGameView: View {
                     } else {
                         Text("Question \(currentIndex + 1) of \(questions.count)")
                             .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
 
                         VStack(alignment: .leading, spacing: 12) {
                             Text(currentQuestion.prompt)
                                 .font(.system(size: 24, weight: .heavy, design: .rounded))
-                                .foregroundStyle(Color(hex: "#1F6FE5"))
+                                .foregroundStyle(Color.bqTitle)
 
                             ForEach(currentQuestion.options, id: \.self) { option in
                                 Button {
@@ -400,7 +400,7 @@ private struct BibleQuizGameView: View {
                             if selectedAnswer != nil {
                                 Text(currentQuestion.explanation)
                                     .font(.system(.subheadline, design: .rounded))
-                                    .foregroundStyle(Color(hex: "#4B5975"))
+                                    .foregroundStyle(Color.bqBody)
                                     .padding(.top, 2)
 
                                 Button {
@@ -470,14 +470,14 @@ private struct BibleQuizGameView: View {
     }
 
     private func buttonTextColor(_ option: String) -> Color {
-        guard let selectedAnswer else { return Color(hex: "#1F6FE5") }
+        guard let selectedAnswer else { return Color.bqTitle }
         if option == currentQuestion.correctAnswer {
             return Color(hex: "#1A7A47")
         }
         if option == selectedAnswer {
             return Color(hex: "#B42318")
         }
-        return Color(hex: "#1F6FE5")
+        return Color.bqTitle
     }
 }
 

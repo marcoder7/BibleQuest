@@ -61,7 +61,7 @@ struct HomePage: View {
         let welcomeName = appState.profile?.displayName ?? "Explorer"
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()
@@ -72,13 +72,13 @@ struct HomePage: View {
                     VStack(spacing: 6) {
                         Text("Welcome,\n\(welcomeName)!")
                             .font(.system(size: 36, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity, alignment: .center)
 
                         Text("Ready for today's adventure? ✨")
                             .font(.system(.title3, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 24)
 
@@ -292,7 +292,7 @@ struct ProfilePage: View {
 
             Text(appState.profile?.displayName ?? "Explorer")
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
-                .foregroundStyle(Color(hex: "#1F6FE5"))
+                .foregroundStyle(Color.bqTitle)
 
             Button(role: .destructive) {
                 // 🔹 Sign out from Firebase
@@ -306,7 +306,7 @@ struct ProfilePage: View {
                     .frame(maxWidth: 220, minHeight: 50)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white)
+                            .fill(Color.bqCardSurface)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -320,7 +320,7 @@ struct ProfilePage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()

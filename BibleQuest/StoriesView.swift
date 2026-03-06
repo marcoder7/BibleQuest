@@ -6,7 +6,7 @@ struct StoriesView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -17,11 +17,11 @@ struct StoriesView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Storybook Library")
                             .font(.system(size: 34, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
 
                         Text("Tap a book cover, then swipe to turn pages.")
                             .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(.top, 16)
 
@@ -202,7 +202,7 @@ private struct StoryReaderView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#CFEAFF"), Color(hex: "#E8F2FF")],
+                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -235,7 +235,7 @@ private struct StoryReaderView: View {
 
                     Text(currentPagesLabel)
                         .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(Color(hex: "#6C7A99"))
+                        .foregroundStyle(Color.bqSubtitle)
 
                     Spacer()
 
@@ -337,11 +337,11 @@ private struct StoryPaperPage: View {
 
                         Text(page.title)
                             .font(.system(size: 22, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color(hex: "#1F6FE5"))
+                            .foregroundStyle(Color.bqTitle)
 
                         Text(page.body)
                             .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color(hex: "#4B5975"))
+                            .foregroundStyle(Color.bqBody)
                             .lineSpacing(4)
 
                         Spacer(minLength: 0)
@@ -358,7 +358,7 @@ private struct StoryPaperPage: View {
 
                         Text("Keep reading")
                             .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color(hex: "#6C7A99"))
+                            .foregroundStyle(Color.bqSubtitle)
                     }
                     .padding(16)
                 }
