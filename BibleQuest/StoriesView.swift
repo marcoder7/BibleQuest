@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct StoriesView: View {
     @State private var selectedStory: BibleStory?
@@ -114,9 +115,31 @@ private struct StoryCoverPressStyle: ButtonStyle {
 
 private struct StoryReaderView: View {
     let story: BibleStory
-    @State private var spreadIndex: Int = 0
+    @Environment(\.dismiss) private var dismiss
+    @State private var pageIndex: Int = 0
 
     private var pages: [StoryPage] {
+        if story.isDavidStory {
+            return [
+                StoryPage(
+                    title: story.title,
+                    body: "",
+                    icon: nil,
+                    reference: story.referenceRange,
+                    imageName: "davidOne",
+                    isImageOnly: true
+                ),
+                StoryPage(
+                    title: story.title,
+                    body: "",
+                    icon: nil,
+                    reference: story.referenceRange,
+                    imageName: "davidTwo",
+                    isImageOnly: true
+                )
+            ]
+        }
+
         var bookPages: [StoryPage] = [
             StoryPage(
                 title: story.title,
@@ -176,193 +199,509 @@ private struct StoryReaderView: View {
         return bookPages
     }
 
-    private var spreads: [StorySpread] {
-        var items: [StorySpread] = []
-        var idx = 0
+    var body: some View {
+        ZStack {
+            StoryReaderBackdrop(story: story)
 
-        while idx < pages.count {
-            let left = pages[idx]
-            let right = idx + 1 < pages.count ? pages[idx + 1] : nil
-            items.append(StorySpread(left: left, right: right))
-            idx += 2
+            PageCurlReader(pages: pages, currentIndex: $pageIndex) { index, page in
+                StoryReaderPageView(
+                    story: story,
+                    page: page,
+                    pageNumber: index + 1,
+                    pageCount: pages.count
+                )
+            }
+            .ignoresSafeArea()
+
+            StoryReaderOverlay(
+                title: story.title,
+                currentPage: pageIndex + 1,
+                totalPages: pages.count,
+                showsTitle: !story.isDavidStory,
+                canGoNext: pageIndex < pages.count - 1,
+                onBack: { dismiss() },
+                onNext: goToNextPage
+            )
         }
-
-        return items
+        .ignoresSafeArea()
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .modifier(StoryReaderLandscapeModifier())
     }
 
-    private var currentPagesLabel: String {
-        let leftPage = spreadIndex * 2 + 1
-        let rightPage = min(leftPage + 1, pages.count)
-        if leftPage == rightPage {
-            return "Page \(leftPage) of \(pages.count)"
-        }
-        return "Pages \(leftPage)-\(rightPage) of \(pages.count)"
+    private func goToNextPage() {
+        guard pageIndex < pages.count - 1 else { return }
+        pageIndex += 1
     }
+}
+
+private struct StoryReaderBackdrop: View {
+    let story: BibleStory
 
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color.bqBackgroundTop, Color.bqBackgroundBottom],
-                startPoint: .top,
-                endPoint: .bottom
+                colors: story.isDavidStory
+                    ? [Color.black, Color(hex: "#091E34"), Color.black]
+                    : [story.palette.primary.opacity(0.95), story.palette.secondary.opacity(0.88), Color(hex: "#0F2238")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                OpenBookSpread(spread: spreads[spreadIndex])
-                    .frame(height: 500)
-                    .padding(.horizontal, 14)
-                    .gesture(
-                        DragGesture(minimumDistance: 24)
-                            .onEnded { value in
-                                if value.translation.width < -45 {
-                                    goToNextSpread()
-                                } else if value.translation.width > 45 {
-                                    goToPreviousSpread()
-                                }
-                            }
-                    )
+            Circle()
+                .fill(.white.opacity(story.isDavidStory ? 0.08 : 0.16))
+                .frame(width: 360, height: 360)
+                .blur(radius: 32)
+                .offset(x: 180, y: -220)
 
-                HStack {
-                    Button(action: goToPreviousSpread) {
-                        Image(systemName: "chevron.left.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(spreadIndex == 0 ? .gray.opacity(0.4) : Color(hex: "#2C7CF6"))
-                    }
-                    .disabled(spreadIndex == 0)
-
-                    Spacer()
-
-                    Text(currentPagesLabel)
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(Color.bqSubtitle)
-
-                    Spacer()
-
-                    Button(action: goToNextSpread) {
-                        Image(systemName: "chevron.right.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(spreadIndex == spreads.count - 1 ? .gray.opacity(0.4) : Color(hex: "#2C7CF6"))
-                    }
-                    .disabled(spreadIndex == spreads.count - 1)
-                }
-                .padding(.horizontal, 30)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 10)
-        }
-        .navigationTitle(story.title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func goToNextSpread() {
-        guard spreadIndex < spreads.count - 1 else { return }
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-            spreadIndex += 1
-        }
-    }
-
-    private func goToPreviousSpread() {
-        guard spreadIndex > 0 else { return }
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-            spreadIndex -= 1
+            Circle()
+                .fill(Color.black.opacity(0.2))
+                .frame(width: 420, height: 420)
+                .blur(radius: 40)
+                .offset(x: -200, y: 260)
         }
     }
 }
 
-private struct OpenBookSpread: View {
-    let spread: StorySpread
+private struct StoryReaderOverlay: View {
+    let title: String
+    let currentPage: Int
+    let totalPages: Int
+    let showsTitle: Bool
+    let canGoNext: Bool
+    let onBack: () -> Void
+    let onNext: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                Button(action: onBack) {
+                    GlassChromeButton(systemName: "chevron.left")
+                }
+
+                Spacer(minLength: 0)
+
+                if showsTitle {
+                    StoryHUDPill(text: title)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+
+            Spacer(minLength: 0)
+
+            HStack(alignment: .bottom, spacing: 16) {
+                StoryHUDPill(text: "\(currentPage) / \(totalPages)")
+
+                Spacer(minLength: 0)
+
+                if canGoNext {
+                    Button(action: onNext) {
+                        GlassChromeButton(systemName: "arrow.right", size: 64)
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 22)
+        }
+    }
+}
+
+private struct StoryHUDPill: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.26), .white.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(.white.opacity(0.34), lineWidth: 1)
+                    )
+            )
+            .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 10)
+    }
+}
+
+private struct GlassChromeButton: View {
+    let systemName: String
+    var size: CGFloat = 54
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#D8ECFF"), Color(hex: "#CFE5FF")],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 10)
-
-            HStack(spacing: 0) {
-                StoryPaperPage(page: spread.left)
-
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "#C9DDF3"), Color(hex: "#B6CDE8")],
-                            startPoint: .top,
-                            endPoint: .bottom
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.32), .white.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 10)
-                    .padding(.vertical, 18)
+                        .padding(3)
+                )
+                .overlay(
+                    Circle()
+                        .stroke(.white.opacity(0.4), lineWidth: 1)
+                )
 
-                StoryPaperPage(page: spread.right)
-            }
-            .padding(14)
+            Image(systemName: systemName)
+                .font(.system(size: size * 0.34, weight: .bold))
+                .foregroundStyle(.white)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.8), lineWidth: 1.5)
-        )
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 10)
     }
 }
 
-private struct StoryPaperPage: View {
-    let page: StoryPage?
+private struct StoryReaderPageView: View {
+    let story: BibleStory
+    let page: StoryPage
+    let pageNumber: Int
+    let pageCount: Int
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Color(hex: "#FFFDF7"), Color(hex: "#F8F1E5")],
-                    startPoint: .top,
-                    endPoint: .bottom
+        Group {
+            if page.isImageOnly, let imageName = page.imageName {
+                StoryImagePageView(imageName: imageName)
+            } else {
+                StoryTextPageView(
+                    story: story,
+                    page: page,
+                    pageNumber: pageNumber,
+                    pageCount: pageCount
                 )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color(hex: "#E5D9C4").opacity(0.8), lineWidth: 1)
-            )
-            .overlay {
-                if let page {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let icon = page.icon {
-                            Text(icon)
-                                .font(.system(size: 32))
-                        }
+            }
+        }
+    }
+}
 
-                        Text(page.title)
-                            .font(.system(size: 22, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color.bqTitle)
+private struct StoryImagePageView: View {
+    let imageName: String
 
-                        Text(page.body)
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color.bqBody)
-                            .lineSpacing(4)
-
-                        Spacer(minLength: 0)
-
-                        Text(page.reference ?? "BibleQuest Storybook")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(Color(hex: "#8A96AE"))
-                    }
-                    .padding(16)
+    var body: some View {
+        GeometryReader { proxy in
+            Group {
+                if UIImage(named: imageName) != nil {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFill()
                 } else {
-                    VStack(spacing: 8) {
-                        Text("✨")
-                            .font(.system(size: 26))
-
-                        Text("Keep reading")
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color.bqSubtitle)
-                    }
-                    .padding(16)
+                    LinearGradient(
+                        colors: [Color(hex: "#1B2F47"), Color.black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .overlay(
+                        Text(imageName)
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                    )
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+            .overlay(
+                LinearGradient(
+                    colors: [.black.opacity(0.12), .clear, .black.opacity(0.24)],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+            )
+        }
+        .background(Color.black)
+    }
+}
+
+private struct StoryTextPageView: View {
+    let story: BibleStory
+    let page: StoryPage
+    let pageNumber: Int
+    let pageCount: Int
+
+    private var backgroundColors: [Color] {
+        [
+            story.palette.primary.opacity(0.96),
+            story.palette.secondary.opacity(0.9),
+            Color(hex: "#10253B")
+        ]
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let isWide = proxy.size.width > proxy.size.height
+            let horizontalPadding = max(28, proxy.size.width * 0.05)
+            let verticalPadding = max(24, proxy.size.height * 0.07)
+
+            ZStack {
+                LinearGradient(
+                    colors: backgroundColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                Circle()
+                    .fill(.white.opacity(0.18))
+                    .frame(width: proxy.size.width * 0.42)
+                    .blur(radius: 14)
+                    .offset(x: proxy.size.width * 0.24, y: -proxy.size.height * 0.18)
+
+                Circle()
+                    .fill(Color.black.opacity(0.18))
+                    .frame(width: proxy.size.width * 0.55)
+                    .blur(radius: 28)
+                    .offset(x: -proxy.size.width * 0.22, y: proxy.size.height * 0.24)
+
+                if isWide {
+                    HStack(alignment: .center, spacing: 28) {
+                        storySidebar(proxy: proxy)
+                        storyCard(proxy: proxy)
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.vertical, verticalPadding)
+                } else {
+                    VStack(alignment: .leading, spacing: 20) {
+                        storySidebar(proxy: proxy)
+                        storyCard(proxy: proxy)
+                    }
+                    .padding(24)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func storySidebar(proxy: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(page.icon ?? story.icon)
+                .font(.system(size: min(proxy.size.height * 0.18, 92)))
+
+            Text(story.title)
+                .font(.system(size: min(max(proxy.size.height * 0.052, 20), 32), weight: .heavy, design: .rounded))
+                .foregroundStyle(.white.opacity(0.94))
+                .lineLimit(3)
+
+            StoryHUDPill(text: page.reference ?? story.referenceRange)
+
+            Spacer(minLength: 8)
+
+            Text("Page \(pageNumber)")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.78))
+                .textCase(.uppercase)
+        }
+        .frame(maxWidth: min(max(proxy.size.width * 0.26, 220), 300), alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func storyCard(proxy: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(page.title)
+                .font(.system(size: min(max(proxy.size.height * 0.07, 28), 40), weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(3)
+                .minimumScaleFactor(0.8)
+
+            ScrollView(showsIndicators: false) {
+                Text(page.body)
+                    .font(.system(size: min(max(proxy.size.height * 0.042, 18), 24), weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineSpacing(7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 12) {
+                StoryHUDPill(text: "\(pageNumber) / \(pageCount)")
+
+                Text("Swipe to turn the page")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.22), .white.opacity(0.06)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(.white.opacity(0.34), lineWidth: 1.2)
+                )
+        )
+        .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
+    }
+}
+
+private struct PageCurlReader<PageContent: View>: UIViewControllerRepresentable {
+    let pages: [StoryPage]
+    @Binding var currentIndex: Int
+    let pageView: (Int, StoryPage) -> PageContent
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIViewController(context: Context) -> UIPageViewController {
+        let controller = UIPageViewController(
+            transitionStyle: .pageCurl,
+            navigationOrientation: .horizontal,
+            options: [UIPageViewController.OptionsKey.spineLocation: UIPageViewController.SpineLocation.min.rawValue]
+        )
+        controller.dataSource = context.coordinator
+        controller.delegate = context.coordinator
+        controller.isDoubleSided = false
+        controller.view.backgroundColor = .clear
+
+        context.coordinator.controllers = makeControllers()
+
+        if let initial = context.coordinator.controllers[safe: currentIndex] ?? context.coordinator.controllers.first {
+            controller.setViewControllers([initial], direction: .forward, animated: false)
+        }
+
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIPageViewController, context: Context) {
+        context.coordinator.parent = self
+
+        if context.coordinator.controllers.count != pages.count {
+            context.coordinator.controllers = makeControllers()
+        }
+
+        guard
+            let visibleController = controller.viewControllers?.first,
+            let visibleIndex = context.coordinator.index(of: visibleController),
+            visibleIndex != currentIndex,
+            let targetController = context.coordinator.controllers[safe: currentIndex]
+        else {
+            return
+        }
+
+        let direction: UIPageViewController.NavigationDirection = currentIndex > visibleIndex ? .forward : .reverse
+        controller.setViewControllers([targetController], direction: direction, animated: true)
+    }
+
+    private func makeControllers() -> [UIViewController] {
+        pages.enumerated().map { index, page in
+            let host = UIHostingController(rootView: pageView(index, page).ignoresSafeArea())
+            host.view.backgroundColor = .clear
+            return host
+        }
+    }
+
+    final class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
+        var parent: PageCurlReader
+        var controllers: [UIViewController] = []
+
+        init(parent: PageCurlReader) {
+            self.parent = parent
+        }
+
+        func index(of controller: UIViewController) -> Int? {
+            controllers.firstIndex(where: { $0 === controller })
+        }
+
+        func pageViewController(_ pageViewController: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
+            guard let index = index(of: viewController), index > 0 else { return nil }
+            return controllers[index - 1]
+        }
+
+        func pageViewController(_ pageViewController: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
+            guard let index = index(of: viewController), index < controllers.count - 1 else { return nil }
+            return controllers[index + 1]
+        }
+
+        func pageViewController(_ pageViewController: UIPageViewController,
+                                didFinishAnimating finished: Bool,
+                                previousViewControllers: [UIViewController],
+                                transitionCompleted completed: Bool) {
+            guard
+                completed,
+                let visibleController = pageViewController.viewControllers?.first,
+                let index = index(of: visibleController),
+                parent.currentIndex != index
+            else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.parent.currentIndex = index
+            }
+        }
+    }
+}
+
+private struct StoryReaderLandscapeModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                DispatchQueue.main.async {
+                    lockReaderOrientation()
+                }
+            }
+            .onDisappear {
+                DispatchQueue.main.async {
+                    unlockReaderOrientation()
+                }
+            }
+    }
+
+    private func lockReaderOrientation() {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            AppDelegate.orientationLock = .landscape
+            updateOrientation(.landscape)
+        }
+    }
+
+    private func unlockReaderOrientation() {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            AppDelegate.orientationLock = .allButUpsideDown
+            updateOrientation(.portrait)
+        }
+    }
+
+    private func updateOrientation(_ mask: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }) else {
+            return
+        }
+
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+        scene.windows.first(where: \.isKeyWindow)?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 }
 
@@ -611,11 +950,22 @@ private struct StoryPage: Hashable {
     let body: String
     let icon: String?
     let reference: String?
-}
+    let imageName: String?
+    let isImageOnly: Bool
 
-private struct StorySpread: Hashable {
-    let left: StoryPage
-    let right: StoryPage?
+    init(title: String,
+         body: String,
+         icon: String?,
+         reference: String?,
+         imageName: String? = nil,
+         isImageOnly: Bool = false) {
+        self.title = title
+        self.body = body
+        self.icon = icon
+        self.reference = reference
+        self.imageName = imageName
+        self.isImageOnly = isImageOnly
+    }
 }
 
 private struct StoryCoverPalette {
@@ -629,4 +979,20 @@ private struct StoryCoverPalette {
         StoryCoverPalette(primary: Color(hex: "#FF8A3C"), secondary: Color(hex: "#FFB36B")),
         StoryCoverPalette(primary: Color(hex: "#4C78D5"), secondary: Color(hex: "#7AA2F4"))
     ]
+}
+
+private extension BibleStory {
+    var isDavidStory: Bool {
+        id == 5
+    }
+
+    var palette: StoryCoverPalette {
+        StoryCoverPalette.all[(id - 1) % StoryCoverPalette.all.count]
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }

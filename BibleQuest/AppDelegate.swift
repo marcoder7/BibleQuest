@@ -3,6 +3,9 @@ import FirebaseCore
 import GoogleSignIn
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+  static var orientationLock: UIInterfaceOrientationMask = {
+    UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
+  }()
 
   func application(
     _ application: UIApplication,
@@ -20,5 +23,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                    open url: URL,
                    options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
     return GIDSignIn.sharedInstance.handle(url)
+  }
+
+  func application(_ application: UIApplication,
+                   supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+    Self.orientationLock
   }
 }
